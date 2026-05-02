@@ -194,6 +194,10 @@ const INIT = {
 };
 
 function App() {
+  const urlParams   = new URLSearchParams(window.location.search);
+  const initFreezer = FREEZERS[urlParams.get("freezer")] ? urlParams.get("freezer") : "chest";
+  const initZone    = urlParams.get("zone") || null;
+
   const [authUser,   setAuthUser]  = useState(undefined); // undefined = checking, null = signed out
   const [authMode,   setAuthMode]  = useState(null);      // "owner" | "guest" | null
   const [authError,  setAuthError] = useState("");
@@ -225,8 +229,6 @@ function App() {
 
   const isOwner = authMode === "owner";
   const isGuest = authMode === "guest";
-  const initFreezer = FREEZERS[urlParams.get("freezer")] ? urlParams.get("freezer") : "chest";
-  const initZone    = urlParams.get("zone") || null;
 
   const [showScanner, setShowScanner] = useState(false);
   const [scanStatus,  setScanStatus]  = useState("");
