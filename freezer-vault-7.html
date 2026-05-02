@@ -4,20 +4,13 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Freezer Vault</title>
-
-<!-- Firebase v9 compat -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-
-<!-- React 18 -->
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
-
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   html,body,#root{height:100%;width:100%}
@@ -50,7 +43,6 @@
 </head>
 <body>
 <div id="root">
-  <!-- Shown before React boots -->
   <div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:12px;color:#7DD3FC;font-family:monospace">
     <div style="font-size:28px">❄</div>
     <div>Connecting to Freezer Vault…</div>
@@ -58,7 +50,6 @@
 </div>
 
 <script>
-  // ── Firebase init (outside Babel so errors surface clearly) ────────
   try {
     const firebaseConfig = {
       apiKey: "AIzaSyAS7nIm1g7RCXiOTXiUNzru-bxkI0Dsi9A",
@@ -70,7 +61,6 @@
     };
     firebase.initializeApp(firebaseConfig);
     window.__db = firebase.firestore();
-    console.log("Firebase initialised OK");
   } catch(e) {
     document.getElementById("root").innerHTML =
       '<div style="color:#F87171;padding:40px;font-family:monospace;line-height:1.8">' +
@@ -83,7 +73,6 @@
 const { useState, useEffect, useRef } = React;
 const db = window.__db;
 
-// ── Config ─────────────────────────────────────────────────────────
 const FREEZERS = {
   chest: {
     id:"chest", label:"Chest Freezer", icon:"🧊",
@@ -117,46 +106,36 @@ const CATEGORIES = [
 
 const todayStr = () => new Date().toISOString().split("T")[0];
 
-// ── Freezer storage guidelines (months) ────────────────────────────
 const STORAGE_GUIDE = [
-  // Fish & seafood
-  { keys:["salmon","trout","mackerel","sardine","tuna","herring"], months:3,  label:"oily fish" },
-  { keys:["cod","haddock","plaice","sole","pollock","halibut","sea bass","sea bream","tilapia","whiting"], months:6, label:"white fish" },
-  { keys:["prawn","shrimp","scallop","mussel","clam","squid","crab","lobster"], months:3, label:"shellfish" },
-  // Poultry
-  { keys:["chicken breast","chicken fillet"], months:9,  label:"chicken breast" },
-  { keys:["whole chicken","whole turkey"], months:12, label:"whole poultry" },
-  { keys:["chicken","turkey","duck","poultry","hen"], months:9,  label:"poultry" },
-  // Beef
-  { keys:["beef mince","minced beef","ground beef"], months:4,  label:"beef mince" },
-  { keys:["beef","steak","brisket","short rib","oxtail"], months:9,  label:"beef" },
-  // Lamb
-  { keys:["lamb mince","minced lamb"], months:4, label:"lamb mince" },
-  { keys:["lamb","mutton"], months:9,  label:"lamb" },
-  // Pork
-  { keys:["sausage","banger"], months:2,  label:"sausages" },
-  { keys:["bacon","pancetta","lardons"], months:1,  label:"bacon/cured pork" },
-  { keys:["pork mince","minced pork"], months:4, label:"pork mince" },
-  { keys:["pork","ham","gammon"], months:6,  label:"pork" },
-  // Other meat
-  { keys:["mince","ground"], months:4, label:"mince" },
-  { keys:["burger","patty"], months:4, label:"burgers" },
-  // Cooked meals & leftovers
-  { keys:["soup","broth","stock","chowder"], months:3, label:"soups & broths" },
-  { keys:["curry","stew","casserole","tagine","ragu","bolognese","chilli","chili"], months:3, label:"cooked dishes" },
-  { keys:["pasta","lasagne","lasagna","cannelloni"], months:3, label:"cooked pasta dishes" },
-  { keys:["rice"], months:1, label:"cooked rice" },
-  { keys:["pie","pastry"], months:3, label:"pies" },
-  { keys:["bread","loaf","roll","bun","bagel"], months:1, label:"bread" },
-  // Veg & fruit
-  { keys:["spinach","kale","broccoli","cauliflower","pea","bean","sweetcorn","corn","carrot","parsnip","butternut","squash","courgette","pepper","leek","onion","mushroom"], months:12, label:"vegetables" },
-  { keys:["tomato"], months:6, label:"tomatoes" },
-  { keys:["berry","strawberr","raspberr","blueberr","blackberr","mango","pineapple","peach","plum","cherry","apple","banana"], months:12, label:"fruit" },
-  // Dairy & eggs
-  { keys:["butter"], months:6, label:"butter" },
-  { keys:["cheese"], months:6, label:"hard cheese" },
-  { keys:["egg"], months:12, label:"eggs (out of shell)" },
-  { keys:["milk","cream"], months:3, label:"dairy" },
+  {keys:["salmon","trout","mackerel","sardine","tuna","herring"],months:3,label:"oily fish"},
+  {keys:["cod","haddock","plaice","sole","pollock","halibut","sea bass","sea bream","tilapia","whiting"],months:6,label:"white fish"},
+  {keys:["prawn","shrimp","scallop","mussel","clam","squid","crab","lobster"],months:3,label:"shellfish"},
+  {keys:["chicken breast","chicken fillet"],months:9,label:"chicken breast"},
+  {keys:["whole chicken","whole turkey"],months:12,label:"whole poultry"},
+  {keys:["chicken","turkey","duck","poultry","hen"],months:9,label:"poultry"},
+  {keys:["beef mince","minced beef","ground beef"],months:4,label:"beef mince"},
+  {keys:["beef","steak","brisket","short rib","oxtail"],months:9,label:"beef"},
+  {keys:["lamb mince","minced lamb"],months:4,label:"lamb mince"},
+  {keys:["lamb","mutton"],months:9,label:"lamb"},
+  {keys:["sausage","banger"],months:2,label:"sausages"},
+  {keys:["bacon","pancetta","lardons"],months:1,label:"bacon/cured pork"},
+  {keys:["pork mince","minced pork"],months:4,label:"pork mince"},
+  {keys:["pork","ham","gammon"],months:6,label:"pork"},
+  {keys:["mince","ground"],months:4,label:"mince"},
+  {keys:["burger","patty"],months:4,label:"burgers"},
+  {keys:["soup","broth","stock","chowder"],months:3,label:"soups & broths"},
+  {keys:["curry","stew","casserole","tagine","ragu","bolognese","chilli","chili"],months:3,label:"cooked dishes"},
+  {keys:["pasta","lasagne","lasagna","cannelloni"],months:3,label:"cooked pasta dishes"},
+  {keys:["rice"],months:1,label:"cooked rice"},
+  {keys:["pie","pastry"],months:3,label:"pies"},
+  {keys:["bread","loaf","roll","bun","bagel"],months:1,label:"bread"},
+  {keys:["spinach","kale","broccoli","cauliflower","pea","bean","sweetcorn","corn","carrot","parsnip","butternut","squash","courgette","pepper","leek","onion","mushroom"],months:12,label:"vegetables"},
+  {keys:["tomato"],months:6,label:"tomatoes"},
+  {keys:["berry","strawberr","raspberr","blueberr","blackberr","mango","pineapple","peach","plum","cherry","apple","banana"],months:12,label:"fruit"},
+  {keys:["butter"],months:6,label:"butter"},
+  {keys:["cheese"],months:6,label:"hard cheese"},
+  {keys:["egg"],months:12,label:"eggs (out of shell)"},
+  {keys:["milk","cream"],months:3,label:"dairy"},
 ];
 
 function suggestBestBefore(name, dateFrozen) {
@@ -166,13 +145,13 @@ function suggestBestBefore(name, dateFrozen) {
     if (entry.keys.some(k => lower.includes(k))) {
       const base = dateFrozen ? new Date(dateFrozen) : new Date();
       base.setMonth(base.getMonth() + entry.months);
-      const dateStr = base.toISOString().split("T")[0];
-      return { dateStr, months: entry.months, label: entry.label };
+      return { dateStr: base.toISOString().split("T")[0], months: entry.months, label: entry.label };
     }
   }
   return null;
 }
-const getZone  = (fid, zid) => FREEZERS[fid]?.zones.find(z => z.id === zid);
+
+const getZone = (fid, zid) => FREEZERS[fid]?.zones.find(z => z.id === zid);
 
 function daysUntil(d) {
   if (!d) return null;
@@ -181,11 +160,11 @@ function daysUntil(d) {
 function expiryInfo(bb) {
   const d = daysUntil(bb);
   if (d === null) return null;
-  if (d < 0)   return { label:`Expired ${Math.abs(d)}d ago`, color:"#F87171", pulse:true  };
-  if (d === 0) return { label:"Expires today",               color:"#F87171", pulse:true  };
-  if (d <= 7)  return { label:`${d}d left`,                  color:"#FB923C", pulse:true  };
-  if (d <= 30) return { label:`${d}d left`,                  color:"#FDE68A", pulse:false };
-  return             { label:`${d}d left`,                   color:"#4ADE80", pulse:false };
+  if (d < 0)   return {label:`Expired ${Math.abs(d)}d ago`,color:"#F87171",pulse:true};
+  if (d === 0) return {label:"Expires today",              color:"#F87171",pulse:true};
+  if (d <= 7)  return {label:`${d}d left`,                 color:"#FB923C",pulse:true};
+  if (d <= 30) return {label:`${d}d left`,                 color:"#FDE68A",pulse:false};
+  return             {label:`${d}d left`,                  color:"#4ADE80",pulse:false};
 }
 function frozenLabel(d) {
   if (!d) return "";
@@ -203,36 +182,35 @@ function fmtTime(ts) {
 
 const INIT = {
   name:"", freezer:"chest", zone:"basket", category:"Cooked Meals",
-  bags:1, qty:1, unit:"portions", dateFrozen:todayStr(), bestBefore:"", notes:""
+  bags:1, qty:1, unit:"portions", dateFrozen:todayStr(), bestBefore:"",
+  notify:false, minBags:1, notes:""
 };
 
-// ── App ─────────────────────────────────────────────────────────────
 function App() {
-  // Read URL params on load (for QR code deep links)
-  const urlParams = new URLSearchParams(window.location.search);
+  const urlParams   = new URLSearchParams(window.location.search);
   const initFreezer = FREEZERS[urlParams.get("freezer")] ? urlParams.get("freezer") : "chest";
   const initZone    = urlParams.get("zone") || null;
 
   const [showScanner, setShowScanner] = useState(false);
-  const [scanStatus,  setScanStatus]  = useState(""); // "scanning" | "looking" | "notfound" | "error" | ""
+  const [scanStatus,  setScanStatus]  = useState("");
   const scannerRef = useRef(null);
 
-  const [items,      setItems]    = useState([]);
-  const [dbError,    setDbError]  = useState(null);
-  const [loading,    setLoading]  = useState(true);
-  const [online,     setOnline]   = useState(navigator.onLine);
-  const [syncing,    setSyncing]  = useState(false);
-  const [lastUpd,    setLastUpd]  = useState(null);
-  const [activeFreezer, setAF]    = useState(initFreezer);
-  const [activeZone,    setAZ]    = useState(initZone);
-  const [view,       setView]     = useState(initZone ? "map" : "map");
-  const [kiosk,      setKiosk]    = useState(false);
-  const [showForm,   setShowForm] = useState(false);
-  const [form,       setForm]     = useState(INIT);
-  const [editId,     setEditId]   = useState(null);
-  const [search,     setSearch]   = useState("");
-  const [filterCat,  setFilterCat]= useState("all");
-  const [clock,      setClock]    = useState(new Date());
+  const [items,      setItems]     = useState([]);
+  const [dbError,    setDbError]   = useState(null);
+  const [loading,    setLoading]   = useState(true);
+  const [online,     setOnline]    = useState(navigator.onLine);
+  const [syncing,    setSyncing]   = useState(false);
+  const [lastUpd,    setLastUpd]   = useState(null);
+  const [activeFreezer, setAF]     = useState(initFreezer);
+  const [activeZone,    setAZ]     = useState(initZone);
+  const [view,       setView]      = useState("map");
+  const [kiosk,      setKiosk]     = useState(false);
+  const [showForm,   setShowForm]  = useState(false);
+  const [form,       setForm]      = useState(INIT);
+  const [editId,     setEditId]    = useState(null);
+  const [search,     setSearch]    = useState("");
+  const [filterCat,  setFilterCat] = useState("all");
+  const [clock,      setClock]     = useState(new Date());
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 30000);
@@ -240,14 +218,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const on  = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online",  on);
-    window.addEventListener("offline", off);
+    const on = () => setOnline(true), off = () => setOnline(false);
+    window.addEventListener("online", on); window.addEventListener("offline", off);
     return () => { window.removeEventListener("online",on); window.removeEventListener("offline",off); };
   }, []);
 
-  // Stop scanner helper
   async function stopScanner() {
     if (scannerRef.current) {
       try { await scannerRef.current.stop(); } catch(e) {}
@@ -256,94 +231,60 @@ function App() {
     setShowScanner(false);
   }
 
-  // Start scanner when showScanner becomes true
   useEffect(() => {
     if (!showScanner) return;
     setScanStatus("scanning");
     let cancelled = false;
-
-    // Small delay to ensure the div is in the DOM
     const t = setTimeout(async () => {
       try {
         const scanner = new Html5Qrcode("barcode-reader");
         scannerRef.current = scanner;
         await scanner.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 240, height: 120 } },
+          {facingMode:"environment"},
+          {fps:10, qrbox:{width:240,height:120}},
           async (barcode) => {
             if (cancelled) return;
-            // Barcode found — stop camera and look up product
             try { await scanner.stop(); } catch(e) {}
             scannerRef.current = null;
             setShowScanner(false);
             setScanStatus("looking");
             try {
-              const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+              const res  = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
               const data = await res.json();
               if (data.status === 1 && data.product) {
-                const p = data.product;
+                const p     = data.product;
                 const brand = (p.brands || "").split(",")[0].trim();
                 const name  = p.product_name_en || p.product_name || "";
                 const full  = [brand, name].filter(Boolean).join(" — ");
-                if (full) {
-                  setForm(f => ({ ...f, name: full }));
-                  setScanStatus("");
-                } else {
-                  setScanStatus("notfound");
-                }
-              } else {
-                setScanStatus("notfound");
-              }
+                if (full) { setForm(f => ({...f, name: full})); setScanStatus(""); }
+                else setScanStatus("notfound");
+              } else setScanStatus("notfound");
             } catch(e) { setScanStatus("error"); }
           },
-          () => {} // frame errors — ignore
+          () => {}
         );
-      } catch(e) {
-        console.error("Scanner error:", e);
-        setScanStatus("error");
-      }
+      } catch(e) { console.error("Scanner:",e); setScanStatus("error"); }
     }, 150);
-
     return () => {
-      cancelled = true;
-      clearTimeout(t);
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
-        scannerRef.current = null;
-      }
+      cancelled = true; clearTimeout(t);
+      if (scannerRef.current) { scannerRef.current.stop().catch(()=>{}); scannerRef.current = null; }
     };
   }, [showScanner]);
 
-  // Firestore live listener
   useEffect(() => {
     if (!db) { setDbError("Database not initialised"); setLoading(false); return; }
-    const unsub = db.collection("items")
-      .onSnapshot(
-        snap => {
-          const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          // Sort by createdAt client-side to avoid needing a Firestore index
-          docs.sort((a, b) => {
-            const at = a.createdAt?.toMillis?.() ?? 0;
-            const bt = b.createdAt?.toMillis?.() ?? 0;
-            return at - bt;
-          });
-          setItems(docs);
-          setLoading(false);
-          if (docs.length > 0) {
-            const latest = docs.reduce((a, b) => {
-              const at = a.updatedAt?.toMillis?.() ?? 0;
-              const bt = b.updatedAt?.toMillis?.() ?? 0;
-              return bt > at ? b : a;
-            });
-            setLastUpd(latest.updatedAt ?? null);
-          }
-        },
-        err => {
-          console.error("Firestore snapshot error:", err);
-          setDbError(err.message);
-          setLoading(false);
+    const unsub = db.collection("items").onSnapshot(
+      snap => {
+        const docs = snap.docs.map(d => ({id:d.id,...d.data()}));
+        docs.sort((a,b) => (a.createdAt?.toMillis?.()??0) - (b.createdAt?.toMillis?.()??0));
+        setItems(docs); setLoading(false);
+        if (docs.length > 0) {
+          const latest = docs.reduce((a,b) => (b.updatedAt?.toMillis?.()??0) > (a.updatedAt?.toMillis?.()??0) ? b : a);
+          setLastUpd(latest.updatedAt ?? null);
         }
-      );
+      },
+      err => { setDbError(err.message); setLoading(false); }
+    );
     return () => unsub();
   }, []);
 
@@ -352,85 +293,69 @@ function App() {
     setSyncing(true);
     try {
       const payload = {
-        name: form.name, freezer: form.freezer, zone: form.zone,
-        category: form.category, bags: Number(form.bags)||1, qty: Number(form.qty), unit: form.unit,
-        dateFrozen: form.dateFrozen, bestBefore: form.bestBefore || "",
-        notes: form.notes || "",
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        name:form.name, freezer:form.freezer, zone:form.zone, category:form.category,
+        bags:Number(form.bags)||1, qty:Number(form.qty), unit:form.unit,
+        dateFrozen:form.dateFrozen, bestBefore:form.bestBefore||"",
+        notify:form.notify||false, minBags:Number(form.minBags)||1,
+        notes:form.notes||"",
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
       };
-      if (editId) {
-        await db.collection("items").doc(editId).update(payload);
-      } else {
-        payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-        await db.collection("items").add(payload);
-      }
-    } catch(e) { console.error("Save error:", e); alert("Save failed: " + e.message); }
-    setSyncing(false);
-    setShowForm(false); setEditId(null); setForm(INIT);
+      if (editId) { await db.collection("items").doc(editId).update(payload); }
+      else { payload.createdAt = firebase.firestore.FieldValue.serverTimestamp(); await db.collection("items").add(payload); }
+    } catch(e) { alert("Save failed: " + e.message); }
+    setSyncing(false); setShowForm(false); setEditId(null); setForm(INIT);
   }
 
   async function del(id) {
     setSyncing(true);
-    try { await db.collection("items").doc(id).delete(); }
-    catch(e) { console.error("Delete error:", e); }
+    try { await db.collection("items").doc(id).delete(); } catch(e) {}
     setSyncing(false);
   }
 
   async function adj(id, delta, currentBags) {
-    const newBags = Math.max(0, currentBags + delta);
+    const n = Math.max(0, currentBags + delta);
     setSyncing(true);
     try {
-      if (newBags === 0) {
-        await db.collection("items").doc(id).delete();
-      } else {
-        await db.collection("items").doc(id).update({
-          bags: newBags,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-      }
-    } catch(e) { console.error("Adjust error:", e); }
+      if (n === 0) { await db.collection("items").doc(id).delete(); }
+      else { await db.collection("items").doc(id).update({bags:n, updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); }
+    } catch(e) {}
     setSyncing(false);
   }
 
   function matches(it) {
     const q = search.toLowerCase();
-    return (it.name.toLowerCase().includes(q) || (it.notes||"").toLowerCase().includes(q))
-      && (filterCat === "all" || it.category === filterCat);
+    return (it.name.toLowerCase().includes(q)||(it.notes||"").toLowerCase().includes(q))
+      && (filterCat==="all"||it.category===filterCat);
   }
-  const zoneItems = (fid, zid) => items.filter(it => it.freezer===fid && it.zone===zid && matches(it));
-  const zoneExp   = (fid, zid) => items.filter(i  => i.freezer===fid && i.zone===zid && daysUntil(i.bestBefore)!==null && daysUntil(i.bestBefore)<=7).length;
+  const zoneItems = (fid,zid) => items.filter(it=>it.freezer===fid&&it.zone===zid&&matches(it));
+  const zoneExp   = (fid,zid) => items.filter(i=>i.freezer===fid&&i.zone===zid&&daysUntil(i.bestBefore)!==null&&daysUntil(i.bestBefore)<=7).length;
 
-  const allExpiring  = items.filter(it => { const d=daysUntil(it.bestBefore); return d!==null&&d<=7; });
-  const totalPortions= items.reduce((s,i) => s+(Number(i.bags||1)*Number(i.qty)), 0);
-  const fz = FREEZERS[activeFreezer];
+  const allExpiring   = items.filter(it=>{const d=daysUntil(it.bestBefore);return d!==null&&d<=7;});
+  const lowStock      = items.filter(it=>it.notify && (it.bags||1) <= (it.minBags||1));
+  const totalPortions = items.reduce((s,i)=>s+(Number(i.bags||1)*Number(i.qty)),0);
+  const fz = FREEZERS[activeFreezer] || FREEZERS.chest;
   const panelZone  = activeZone ? getZone(activeFreezer, activeZone) : null;
   const panelItems = activeZone ? zoneItems(activeFreezer, activeZone) : [];
 
-  function openAdd(zid) { setForm({...INIT, freezer:activeFreezer, zone:zid||fz.zones[0].id}); setEditId(null); setShowForm(true); }
+  function openAdd(zid) { setForm({...INIT,freezer:activeFreezer,zone:zid||(fz.zones[0].id)}); setEditId(null); setShowForm(true); }
   function openEdit(item) {
-    setForm({ name:item.name, freezer:item.freezer, zone:item.zone, category:item.category||"Other",
-      bags:item.bags||1, qty:item.qty, unit:item.unit, dateFrozen:item.dateFrozen||todayStr(), bestBefore:item.bestBefore||"", notes:item.notes||"" });
+    setForm({name:item.name,freezer:item.freezer,zone:item.zone,category:item.category||"Other",
+      bags:item.bags||1,qty:item.qty,unit:item.unit,dateFrozen:item.dateFrozen||todayStr(),bestBefore:item.bestBefore||"",
+      notify:item.notify||false,minBags:item.minBags||1,notes:item.notes||""});
     setEditId(item.id); setShowForm(true);
   }
 
   const statusColor = online ? "#4ADE80" : "#FB923C";
   const statusLabel = !online ? "offline" : syncing ? "saving…" : "synced";
 
-  // ── Error screen ──
   if (dbError) return (
     <div style={{padding:40,color:"#F87171",fontFamily:"monospace",lineHeight:1.8}}>
-      <div style={{fontSize:20,marginBottom:12}}>⚠ Could not connect to database</div>
+      <div style={{fontSize:20,marginBottom:12}}>⚠ Could not connect</div>
       <div style={{color:"rgba(255,255,255,.5)",marginBottom:16}}>{dbError}</div>
-      <div style={{color:"rgba(255,255,255,.4)",fontSize:13}}>
-        Check that:<br/>
-        · You have internet access<br/>
-        · Firestore is enabled in your Firebase console<br/>
-        · The database rules allow read/write
-      </div>
+      <div style={{color:"rgba(255,255,255,.4)",fontSize:13}}>Check internet access and Firestore rules.</div>
     </div>
   );
 
-  // ── Loading screen ──
   if (loading) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:14,color:"#7DD3FC"}}>
       <div style={{fontSize:36}} className="spin">↻</div>
@@ -438,7 +363,6 @@ function App() {
     </div>
   );
 
-  // ── Main UI ──
   return (
     <div style={{background:"linear-gradient(160deg,#081624 0%,#0C1F35 60%,#081A28 100%)",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
 
@@ -457,6 +381,7 @@ function App() {
             <div style={{fontSize:10,color:"rgba(125,211,252,.5)",marginTop:2}}>
               {items.length} items · {totalPortions} portions
               {allExpiring.length>0 && <span style={{marginLeft:10,color:"#FB923C"}}>⚠ {allExpiring.length} expiring soon</span>}
+              {lowStock.length>0 && <span style={{marginLeft:10,color:"#F87171"}}>🔔 {lowStock.length} low stock</span>}
               {lastUpd && <span style={{marginLeft:10,color:"rgba(255,255,255,.22)"}}>· updated {fmtTime(lastUpd)}</span>}
             </div>
           </div>
@@ -483,8 +408,7 @@ function App() {
             <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
               <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:"#BAE6FD",letterSpacing:".05em"}}>❄ FREEZER VAULT</span>
               <span style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:statusColor}}>
-                <span style={{width:6,height:6,borderRadius:"50%",background:statusColor,display:"inline-block"}}/>
-                {statusLabel}
+                <span style={{width:6,height:6,borderRadius:"50%",background:statusColor,display:"inline-block"}}/>{statusLabel}
               </span>
             </div>
             <div style={{fontSize:10,color:"rgba(255,255,255,.28)",marginTop:2}}>{items.length} items · updated {fmtTime(lastUpd)}</div>
@@ -507,8 +431,7 @@ function App() {
           <div className="lbl" style={{color:"#FB923C",marginBottom:6,fontSize:9}}>Use This Week</div>
           <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
             {[...allExpiring].sort((a,b)=>daysUntil(a.bestBefore)-daysUntil(b.bestBefore)).map(it=>{
-              const ei   = expiryInfo(it.bestBefore);
-              const zone = getZone(it.freezer, it.zone);
+              const ei=expiryInfo(it.bestBefore), zone=getZone(it.freezer,it.zone);
               return (
                 <div key={it.id} style={{background:"rgba(0,0,0,.2)",border:`1px solid ${ei.color}30`,borderRadius:8,padding:"5px 10px",display:"flex",alignItems:"center",gap:7}}>
                   <span className={ei.pulse?"pulse":""} style={{fontSize:10,color:ei.color,fontWeight:600}}>{ei.label}</span>
@@ -521,19 +444,30 @@ function App() {
         </div>
       )}
 
+      {/* LOW STOCK PANEL */}
+      {lowStock.length>0 && (
+        <div style={{padding:"9px 20px",background:"rgba(248,113,113,.06)",borderBottom:"1px solid rgba(248,113,113,.12)"}}>
+          <div className="lbl" style={{color:"#F87171",marginBottom:6,fontSize:9}}>Low Stock</div>
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+            {lowStock.map(it=>{
+              const zone=getZone(it.freezer,it.zone);
+              return (
+                <div key={it.id} style={{background:"rgba(0,0,0,.2)",border:"1px solid rgba(248,113,113,.25)",borderRadius:8,padding:"5px 10px",display:"flex",alignItems:"center",gap:7}}>
+                  <span style={{fontSize:10,color:"#F87171",fontWeight:600}}>🔔 {it.bags||1} left</span>
+                  <span style={{fontSize:11,color:"#E0F2FE"}}>{it.name}</span>
+                  <span style={{fontSize:10,color:"rgba(255,255,255,.3)"}}>{FREEZERS[it.freezer]?.icon} {zone?.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* FREEZER TABS */}
       <div style={{padding:"9px 20px 0",display:"flex",gap:6,background:"rgba(0,0,0,.1)",borderBottom:"1px solid rgba(125,211,252,.05)"}}>
-        <button className={`tab ${activeFreezer==="overview"?"tab-on":"tab-off"}`}
-          style={kiosk?{fontSize:14,padding:"8px 20px"}:{}}
-          onClick={()=>{setAF("overview");setAZ(null);}}>
-          📊 Overview
-        </button>
-        {Object.values(FREEZERS).map(f => (
-          <button key={f.id} className={`tab ${activeFreezer===f.id?"tab-on":"tab-off"}`}
-            style={kiosk?{fontSize:14,padding:"8px 20px"}:{}}
-            onClick={()=>{setAF(f.id);setAZ(null);}}>
-            {f.icon} {f.label}
-          </button>
+        <button className={`tab ${activeFreezer==="overview"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("overview");setAZ(null);}}>📊 Overview</button>
+        {Object.values(FREEZERS).map(f=>(
+          <button key={f.id} className={`tab ${activeFreezer===f.id?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF(f.id);setAZ(null);}}>{f.icon} {f.label}</button>
         ))}
       </div>
 
@@ -551,36 +485,27 @@ function App() {
       {/* MAIN */}
       <div style={{padding:kiosk?"20px 24px":"15px 20px",flex:1,overflow:"auto"}}>
 
-        {/* OVERVIEW */}
         {activeFreezer==="overview" && (
-          <OverviewPanel items={items} allExpiring={allExpiring} totalPortions={totalPortions} expiryInfo={expiryInfo} getZone={getZone} CATEGORIES={CATEGORIES} FREEZERS={FREEZERS} daysUntil={daysUntil}/>
+          <OverviewPanel items={items} allExpiring={allExpiring} totalPortions={totalPortions} lowStock={lowStock} expiryInfo={expiryInfo} getZone={getZone} CATEGORIES={CATEGORIES} FREEZERS={FREEZERS} daysUntil={daysUntil}/>
         )}
 
         {activeFreezer!=="overview" && view==="map" && (
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
-
-            {/* Diagram */}
             <div style={{flex:"0 0 auto"}}>
-              <div className="lbl" style={{color:"rgba(125,211,252,.3)",marginBottom:9,fontSize:9}}>
-                {fz.label} · {activeFreezer==="chest"?"Top View":"Front View"}
-              </div>
+              <div className="lbl" style={{color:"rgba(125,211,252,.3)",marginBottom:9,fontSize:9}}>{fz.label} · {activeFreezer==="chest"?"Top View":"Front View"}</div>
               <div style={{border:"2px solid rgba(125,211,252,.18)",borderRadius:14,padding:8,background:"rgba(0,0,0,.2)",width:kiosk?350:290}}>
                 {activeFreezer==="chest"
                   ? <ChestMap  fz={fz} zoneItems={zoneItems} zoneExp={zoneExp} activeZone={activeZone} setAZ={setAZ} kiosk={kiosk}/>
-                  : <IndoorMap fz={fz} zoneItems={zoneItems} zoneExp={zoneExp} activeZone={activeZone} setAZ={setAZ} kiosk={kiosk}/>
-                }
+                  : <IndoorMap fz={fz} zoneItems={zoneItems} zoneExp={zoneExp} activeZone={activeZone} setAZ={setAZ} kiosk={kiosk}/>}
               </div>
               <div style={{marginTop:10,display:"flex",flexWrap:"wrap",gap:"4px 12px"}}>
                 {[["#4ADE80",">30d"],["#FDE68A","7–30d"],["#FB923C","<7d"],["#F87171","expired"]].map(([c,l])=>(
                   <div key={l} style={{display:"flex",alignItems:"center",gap:5}}>
-                    <div style={{width:7,height:7,borderRadius:"50%",background:c}}/>
-                    <span style={{fontSize:10,color:"rgba(255,255,255,.3)"}}>{l}</span>
+                    <div style={{width:7,height:7,borderRadius:"50%",background:c}}/><span style={{fontSize:10,color:"rgba(255,255,255,.3)"}}>{l}</span>
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Detail panel */}
             <div style={{flex:1,minWidth:220}} className="fadein">
               {panelZone ? (
                 <>
@@ -595,17 +520,12 @@ function App() {
                   {panelItems.length===0
                     ? <div style={{textAlign:"center",padding:"36px 0",color:"rgba(255,255,255,.18)",fontSize:12,fontStyle:"italic"}}>Empty</div>
                     : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                        {panelItems.map(it=>(
-                          <ItemCard key={it.id} item={it} zone={panelZone} kiosk={kiosk} isGreen={activeFreezer==="indoor"}
-                            onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it.bags||1)}/>
-                        ))}
-                      </div>
-                  }
+                        {panelItems.map(it=><ItemCard key={it.id} item={it} zone={panelZone} kiosk={kiosk} isGreen={activeFreezer==="indoor"} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it.bags||1)}/>)}
+                      </div>}
                 </>
               ) : (
                 <div style={{textAlign:"center",padding:kiosk?"70px 0":"50px 0",color:"rgba(255,255,255,.16)",fontSize:kiosk?14:12}}>
-                  <div style={{fontSize:kiosk?32:24,marginBottom:10,opacity:.3}}>☝️</div>
-                  Tap a zone on the map
+                  <div style={{fontSize:kiosk?32:24,marginBottom:10,opacity:.3}}>☝️</div>Tap a zone on the map
                 </div>
               )}
             </div>
@@ -613,10 +533,9 @@ function App() {
         )}
 
         {activeFreezer!=="overview" && view==="list" && (
-          /* LIST VIEW */
           <div>
-            {fz.zones.map(zone => {
-              const zi = zoneItems(fz.id, zone.id);
+            {fz.zones.map(zone=>{
+              const zi=zoneItems(fz.id,zone.id);
               return (
                 <div key={zone.id} style={{marginBottom:22}}>
                   <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -628,12 +547,8 @@ function App() {
                   {zi.length===0
                     ? <div style={{fontSize:11,color:"rgba(255,255,255,.16)",fontStyle:"italic",paddingLeft:18}}>Empty</div>
                     : <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                        {zi.map(it=>(
-                          <ItemCard key={it.id} item={it} zone={zone} isGreen={activeFreezer==="indoor"}
-                            onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it.bags||1)}/>
-                        ))}
-                      </div>
-                  }
+                        {zi.map(it=><ItemCard key={it.id} item={it} zone={zone} isGreen={activeFreezer==="indoor"} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it.bags||1)}/>)}
+                      </div>}
                 </div>
               );
             })}
@@ -648,50 +563,30 @@ function App() {
       {showForm && (
         <div className="overlay" onClick={e=>{if(e.target===e.currentTarget){stopScanner();setShowForm(false);setEditId(null);}}}>
           <div className="modal">
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:16,marginBottom:18,color:"#BAE6FD"}}>
-              {editId?"Edit Item":"Add to Freezer"}
-            </div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:16,marginBottom:18,color:"#BAE6FD"}}>{editId?"Edit Item":"Add to Freezer"}</div>
             <div style={{display:"flex",flexDirection:"column",gap:13}}>
+
               <Field label="NAME">
                 <input className="inp" placeholder="e.g. Beef Brisket Dump Bag" value={form.name}
                   onChange={e=>setForm(f=>({...f,name:e.target.value}))} autoFocus/>
-                <button type="button" className="btn btn-ghost"
-                  style={{width:"100%",marginTop:6,fontSize:11,padding:"7px"}}
-                  onClick={()=>{ setScanStatus(""); setShowScanner(s=>!s); }}>
-                  {showScanner ? "✕ Close camera" : "📷 Scan barcode"}
+                <button type="button" className="btn btn-ghost" style={{width:"100%",marginTop:6,fontSize:11,padding:"7px"}}
+                  onClick={()=>{setScanStatus("");setShowScanner(s=>!s);}}>
+                  {showScanner?"✕ Close camera":"📷 Scan barcode"}
                 </button>
-                {/* Camera view */}
                 {showScanner && (
                   <div style={{marginTop:8,borderRadius:8,overflow:"hidden",background:"#000"}}>
                     <div id="barcode-reader" style={{width:"100%"}}/>
                   </div>
                 )}
-                {/* Status messages */}
-                {scanStatus==="looking" && (
-                  <div style={{fontSize:11,color:"#7DD3FC",marginTop:6,display:"flex",alignItems:"center",gap:6}}>
-                    <span className="spin">↻</span> Looking up barcode…
-                  </div>
-                )}
-                {scanStatus==="notfound" && (
-                  <div style={{fontSize:11,color:"#FB923C",marginTop:6}}>
-                    ⚠ Product not found in database — type name manually
-                  </div>
-                )}
-                {scanStatus==="error" && (
-                  <div style={{fontSize:11,color:"#F87171",marginTop:6}}>
-                    ✕ Camera error — make sure you've allowed camera access
-                  </div>
-                )}
-                {form.name && scanStatus==="" && !showScanner && (
-                  <div style={{fontSize:11,color:"#4ADE80",marginTop:6}}>✓ {form.name}</div>
-                )}
+                {scanStatus==="looking" && <div style={{fontSize:11,color:"#7DD3FC",marginTop:6,display:"flex",alignItems:"center",gap:6}}><span className="spin">↻</span> Looking up barcode…</div>}
+                {scanStatus==="notfound" && <div style={{fontSize:11,color:"#FB923C",marginTop:6}}>⚠ Product not found — type name manually</div>}
+                {scanStatus==="error"    && <div style={{fontSize:11,color:"#F87171",marginTop:6}}>✕ Camera error — check permissions</div>}
+                {form.name && scanStatus==="" && !showScanner && <div style={{fontSize:11,color:"#4ADE80",marginTop:6}}>✓ {form.name}</div>}
               </Field>
+
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <Field label="FREEZER">
-                  <select className="inp" value={form.freezer} onChange={e=>{
-                    const nf=e.target.value;
-                    setForm(f=>({...f,freezer:nf,zone:FREEZERS[nf].zones[0].id}));
-                  }}>
+                  <select className="inp" value={form.freezer} onChange={e=>{const nf=e.target.value;setForm(f=>({...f,freezer:nf,zone:FREEZERS[nf].zones[0].id}));}}>
                     {Object.values(FREEZERS).map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
                   </select>
                 </Field>
@@ -701,62 +596,79 @@ function App() {
                   </select>
                 </Field>
               </div>
+
               <Field label="CATEGORY">
                 <select className="inp" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
                   {CATEGORIES.map(c=><option key={c}>{c}</option>)}
                 </select>
               </Field>
+
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                <Field label="BAGS">
-                  <input className="inp" type="number" min="1" value={form.bags}
-                    onChange={e=>setForm(f=>({...f,bags:Number(e.target.value)}))}/>
-                </Field>
-                <Field label="PORTIONS / BAG">
-                  <input className="inp" type="number" min="1" value={form.qty}
-                    onChange={e=>setForm(f=>({...f,qty:Number(e.target.value)}))}/>
-                </Field>
-                <Field label="UNIT">
-                  <input className="inp" placeholder="portions / g" value={form.unit}
-                    onChange={e=>setForm(f=>({...f,unit:e.target.value}))}/>
-                </Field>
+                <Field label="BAGS"><input className="inp" type="number" min="1" value={form.bags} onChange={e=>setForm(f=>({...f,bags:Number(e.target.value)}))}/></Field>
+                <Field label="PORTIONS / BAG"><input className="inp" type="number" min="1" value={form.qty} onChange={e=>setForm(f=>({...f,qty:Number(e.target.value)}))}/></Field>
+                <Field label="UNIT"><input className="inp" placeholder="portions / g" value={form.unit} onChange={e=>setForm(f=>({...f,unit:e.target.value}))}/></Field>
               </div>
-              {(form.bags > 1 || form.qty > 1) && (
+              {(form.bags>1||form.qty>1) && (
                 <div style={{fontSize:11,color:"rgba(125,211,252,.5)",marginTop:-4}}>
                   = {form.bags} bag{form.bags!==1?"s":""} × {form.qty} {form.unit} = {form.bags*form.qty} {form.unit} total
                 </div>
               )}
+
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <Field label="DATE FROZEN">
-                  <input className="inp" type="date" value={form.dateFrozen}
-                    onChange={e=>setForm(f=>({...f,dateFrozen:e.target.value}))}/>
+                  <input className="inp" type="date" value={form.dateFrozen} onChange={e=>setForm(f=>({...f,dateFrozen:e.target.value}))}/>
                 </Field>
                 <Field label="BEST BEFORE">
-                  <input className="inp" type="date" value={form.bestBefore}
-                    onChange={e=>setForm(f=>({...f,bestBefore:e.target.value}))}/>
+                  <input className="inp" type="date" value={form.bestBefore} onChange={e=>setForm(f=>({...f,bestBefore:e.target.value}))}/>
                   {(()=>{
-                    const s = suggestBestBefore(form.name, form.dateFrozen);
-                    if (!s || form.bestBefore) return null;
+                    const s=suggestBestBefore(form.name,form.dateFrozen);
+                    if(!s||form.bestBefore) return null;
                     return (
-                      <div
-                        onClick={()=>setForm(f=>({...f,bestBefore:s.dateStr}))}
-                        style={{marginTop:6,cursor:"pointer",background:"rgba(56,189,248,.1)",border:"1px solid rgba(56,189,248,.25)",borderRadius:6,padding:"5px 9px",fontSize:11,color:"#7DD3FC",display:"flex",alignItems:"center",gap:6,transition:"background .15s"}}
+                      <div onClick={()=>setForm(f=>({...f,bestBefore:s.dateStr}))}
+                        style={{marginTop:6,cursor:"pointer",background:"rgba(56,189,248,.1)",border:"1px solid rgba(56,189,248,.25)",borderRadius:6,padding:"5px 9px",fontSize:11,color:"#7DD3FC",display:"flex",alignItems:"center",gap:6}}
                         onMouseEnter={e=>e.currentTarget.style.background="rgba(56,189,248,.2)"}
                         onMouseLeave={e=>e.currentTarget.style.background="rgba(56,189,248,.1)"}>
                         <span>💡</span>
-                        <span>{s.label} keeps ~{s.months} month{s.months!==1?"s":""} → <strong>{new Date(s.dateStr).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}</strong></span>
+                        <span>{s.label} keeps ~{s.months}m → <strong>{new Date(s.dateStr).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}</strong></span>
                       </div>
                     );
                   })()}
                 </Field>
               </div>
+
               {form.bestBefore && (()=>{
                 const ei=expiryInfo(form.bestBefore);
-                return ei ? <div style={{background:`${ei.color}18`,border:`1px solid ${ei.color}44`,borderRadius:7,padding:"7px 12px",fontSize:12,color:ei.color}}>{ei.label}</div> : null;
+                return ei?<div style={{background:`${ei.color}18`,border:`1px solid ${ei.color}44`,borderRadius:7,padding:"7px 12px",fontSize:12,color:ei.color}}>{ei.label}</div>:null;
               })()}
+
               <Field label="NOTES (optional)">
-                <input className="inp" placeholder="e.g. ×2 servings, labelled A…" value={form.notes}
-                  onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/>
+                <input className="inp" placeholder="e.g. ×2 servings, labelled A…" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/>
               </Field>
+
+              {/* Low stock notification */}
+              <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.1)",borderRadius:8,padding:"12px"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:form.notify?10:0}}>
+                  <div>
+                    <div style={{fontSize:12,color:"#E0F2FE",fontWeight:500}}>🔔 Notify when low on stock</div>
+                    <div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginTop:2}}>Flag this item for a future low stock alert</div>
+                  </div>
+                  <div onClick={()=>setForm(f=>({...f,notify:!f.notify}))}
+                    style={{width:40,height:22,borderRadius:11,background:form.notify?"#0EA5E9":"rgba(255,255,255,.15)",cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+                    <div style={{width:18,height:18,borderRadius:"50%",background:"white",position:"absolute",top:2,left:form.notify?20:2,transition:"left .2s"}}/>
+                  </div>
+                </div>
+                {form.notify && (
+                  <Field label="ALERT ME WHEN BELOW">
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <input className="inp" type="number" min="1" value={form.minBags}
+                        onChange={e=>setForm(f=>({...f,minBags:Number(e.target.value)}))}
+                        style={{width:80}}/>
+                      <span style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>bag{form.minBags!==1?"s":""}</span>
+                    </div>
+                  </Field>
+                )}
+              </div>
+
               <div style={{display:"flex",gap:8,marginTop:4}}>
                 <button className="btn btn-primary" style={{flex:1,padding:"9px"}} onClick={saveItem}>{editId?"Save Changes":"Add Item"}</button>
                 <button className="btn btn-ghost" onClick={()=>{stopScanner();setShowForm(false);setEditId(null);}}>Cancel</button>
@@ -769,9 +681,8 @@ function App() {
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────────
 function ChestMap({fz,zoneItems,zoneExp,activeZone,setAZ,kiosk}) {
-  const z = id => fz.zones.find(z=>z.id===id);
+  const z=id=>fz.zones.find(z=>z.id===id);
   return (<>
     <div style={{display:"grid",gridTemplateColumns:"1fr 72px",gap:6,marginBottom:6}}>
       <div style={{background:"rgba(255,255,255,.015)",border:"1px dashed rgba(255,255,255,.06)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",padding:"8px 0"}}>
@@ -792,8 +703,8 @@ function ChestMap({fz,zoneItems,zoneExp,activeZone,setAZ,kiosk}) {
 }
 
 function IndoorMap({fz,zoneItems,zoneExp,activeZone,setAZ,kiosk}) {
-  const rows = [["l1","r1"],["l2","r2"],["l3","r3"],["l4","r4"]];
-  const z = id => fz.zones.find(z=>z.id===id);
+  const rows=[["l1","r1"],["l2","r2"],["l3","r3"],["l4","r4"]];
+  const z=id=>fz.zones.find(z=>z.id===id);
   return (<>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:4}}>
       {["LEFT DOOR","RIGHT DOOR"].map(l=>(
@@ -826,8 +737,8 @@ function ZCell({zone,count,active,onClick,exp,kiosk,isGreen}) {
 }
 
 function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen}) {
-  const [hover,setHover] = useState(false);
-  const ei = expiryInfo(item.bestBefore);
+  const [hover,setHover]=useState(false);
+  const ei=expiryInfo(item.bestBefore);
   return (
     <div className={`icard${isGreen?" icard-green":""}`} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
       <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
@@ -835,6 +746,8 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen}) {
           <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
             <span style={{fontSize:kiosk?15:13,fontWeight:500,color:"#E0F2FE"}}>{item.name}</span>
             {ei && <span className={ei.pulse?"pulse":""} style={{fontSize:10,color:ei.color,background:`${ei.color}18`,border:`1px solid ${ei.color}33`,borderRadius:10,padding:"1px 7px",flexShrink:0}}>{ei.label}</span>}
+            {item.notify && (item.bags||1)<=(item.minBags||1) && <span style={{fontSize:10,color:"#F87171",background:"rgba(248,113,113,.15)",border:"1px solid rgba(248,113,113,.3)",borderRadius:10,padding:"1px 7px",flexShrink:0}}>🔔 low</span>}
+            {item.notify && (item.bags||1)>(item.minBags||1) && <span style={{fontSize:10,color:"rgba(255,255,255,.25)",flexShrink:0}}>🔔</span>}
           </div>
           <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap",alignItems:"center"}}>
             <span style={{fontSize:11,color:isGreen?"#6EE7B7":"#64B5D9"}}>
@@ -874,46 +787,32 @@ function Field({label,children}) {
   );
 }
 
-function OverviewPanel({items, allExpiring, totalPortions, expiryInfo, getZone, CATEGORIES, FREEZERS, daysUntil}) {
-  const totalBags = items.reduce((s,i) => s + Number(i.bags||1), 0);
-
-  // Per-freezer stats
-  const freezerStats = Object.values(FREEZERS).map(fz => {
-    const fzItems = items.filter(i => i.freezer === fz.id);
-    const fzPortions = fzItems.reduce((s,i) => s + (Number(i.bags||1)*Number(i.qty)), 0);
-    const fzExpiring = fzItems.filter(i => { const d=daysUntil(i.bestBefore); return d!==null&&d<=7; }).length;
-    return { fz, count: fzItems.length, portions: fzPortions, expiring: fzExpiring };
+function OverviewPanel({items,allExpiring,totalPortions,lowStock,expiryInfo,getZone,CATEGORIES,FREEZERS,daysUntil}) {
+  const totalBags=items.reduce((s,i)=>s+Number(i.bags||1),0);
+  const freezerStats=Object.values(FREEZERS).map(fz=>{
+    const fzItems=items.filter(i=>i.freezer===fz.id);
+    return {fz,count:fzItems.length,portions:fzItems.reduce((s,i)=>s+(Number(i.bags||1)*Number(i.qty)),0),expiring:fzItems.filter(i=>{const d=daysUntil(i.bestBefore);return d!==null&&d<=7;}).length};
   });
+  const catCounts=CATEGORIES.map(cat=>({cat,count:items.filter(i=>i.category===cat).length,portions:items.filter(i=>i.category===cat).reduce((s,i)=>s+(Number(i.bags||1)*Number(i.qty)),0)})).filter(c=>c.count>0).sort((a,b)=>b.count-a.count);
 
-  // Category breakdown across all freezers
-  const catCounts = CATEGORIES.map(cat => ({
-    cat,
-    count: items.filter(i => i.category === cat).length,
-    portions: items.filter(i => i.category === cat).reduce((s,i) => s+(Number(i.bags||1)*Number(i.qty)), 0)
-  })).filter(c => c.count > 0).sort((a,b) => b.count - a.count);
-
-  // Zone breakdown per freezer
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
-
-      {/* Top stats */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
         {[
-          {label:"Total Items",  value:items.length,   sub:"across all freezers"},
-          {label:"Total Bags",   value:totalBags,       sub:"individual containers"},
-          {label:"Total Portions",value:totalPortions,  sub:"combined"},
-        ].map(({label,value,sub}) => (
-          <div key={label} style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",borderRadius:12,padding:"14px 16px"}}>
+          {label:"Total Items",   value:items.length,      sub:"across all freezers", color:"#BAE6FD"},
+          {label:"Total Bags",    value:totalBags,          sub:"individual containers",color:"#BAE6FD"},
+          {label:"Total Portions",value:totalPortions,      sub:"combined",            color:"#BAE6FD"},
+          {label:"Low Stock",     value:lowStock.length,    sub:"need restocking",     color:lowStock.length>0?"#F87171":"#4ADE80"},
+        ].map(({label,value,sub,color})=>(
+          <div key={label} style={{background:"rgba(255,255,255,.04)",border:`1px solid ${color==="#F87171"&&value>0?"rgba(248,113,113,.25)":"rgba(125,211,252,.1)"}`,borderRadius:12,padding:"14px 16px"}}>
             <div className="lbl" style={{color:"rgba(125,211,252,.45)",fontSize:9,marginBottom:6}}>{label}</div>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:28,color:"#BAE6FD",lineHeight:1}}>{value}</div>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:28,color,lineHeight:1}}>{value}</div>
             <div style={{fontSize:10,color:"rgba(255,255,255,.28)",marginTop:4}}>{sub}</div>
           </div>
         ))}
       </div>
-
-      {/* Per-freezer breakdown */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        {freezerStats.map(({fz,count,portions,expiring}) => (
+        {freezerStats.map(({fz,count,portions,expiring})=>(
           <div key={fz.id} style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",borderRadius:12,padding:"14px 16px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
               <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:"#BAE6FD"}}>{fz.icon} {fz.label}</div>
@@ -921,17 +820,13 @@ function OverviewPanel({items, allExpiring, totalPortions, expiryInfo, getZone, 
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
               {[["Items",count],["Portions",portions]].map(([l,v])=>(
-                <div key={l}>
-                  <div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginBottom:2}}>{l}</div>
-                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:20,color:"#7DD3FC"}}>{v}</div>
-                </div>
+                <div key={l}><div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginBottom:2}}>{l}</div><div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:20,color:"#7DD3FC"}}>{v}</div></div>
               ))}
             </div>
-            {/* Zone mini-grid */}
             <div style={{display:"flex",flexDirection:"column",gap:4}}>
-              {fz.zones.map(zone => {
-                const zCount = items.filter(i=>i.freezer===fz.id&&i.zone===zone.id).length;
-                if (zCount === 0) return null;
+              {fz.zones.map(zone=>{
+                const zCount=items.filter(i=>i.freezer===fz.id&&i.zone===zone.id).length;
+                if(zCount===0) return null;
                 return (
                   <div key={zone.id} style={{display:"flex",alignItems:"center",gap:8}}>
                     <div style={{width:7,height:7,borderRadius:2,background:zone.color,flexShrink:0}}/>
@@ -947,33 +842,24 @@ function OverviewPanel({items, allExpiring, totalPortions, expiryInfo, getZone, 
           </div>
         ))}
       </div>
-
-      {/* Category breakdown */}
-      {catCounts.length > 0 && (
+      {catCounts.length>0 && (
         <div style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",borderRadius:12,padding:"14px 16px"}}>
           <div className="lbl" style={{color:"rgba(125,211,252,.45)",fontSize:9,marginBottom:12}}>By Category</div>
           <div style={{display:"flex",flexDirection:"column",gap:7}}>
-            {catCounts.map(({cat,count,portions}) => {
-              const pct = Math.min(100,(count/Math.max(1,items.length))*100);
-              return (
-                <div key={cat} style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:130,fontSize:11,color:"rgba(255,255,255,.5)",flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cat}</div>
-                  <div style={{flex:1,height:5,background:"rgba(255,255,255,.06)",borderRadius:3,overflow:"hidden"}}>
-                    <div style={{height:"100%",background:"linear-gradient(90deg,#0EA5E9,#38BDF8)",width:`${pct}%`,borderRadius:3}}/>
-                  </div>
-                  <div style={{fontSize:11,color:"#7DD3FC",width:20,textAlign:"right",flexShrink:0}}>{count}</div>
-                  <div style={{fontSize:10,color:"rgba(255,255,255,.3)",width:70,flexShrink:0}}>{portions} portions</div>
+            {catCounts.map(({cat,count,portions})=>(
+              <div key={cat} style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:130,fontSize:11,color:"rgba(255,255,255,.5)",flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cat}</div>
+                <div style={{flex:1,height:5,background:"rgba(255,255,255,.06)",borderRadius:3,overflow:"hidden"}}>
+                  <div style={{height:"100%",background:"linear-gradient(90deg,#0EA5E9,#38BDF8)",width:`${Math.min(100,(count/Math.max(1,items.length))*100)}%`,borderRadius:3}}/>
                 </div>
-              );
-            })}
+                <div style={{fontSize:11,color:"#7DD3FC",width:20,textAlign:"right",flexShrink:0}}>{count}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,.3)",width:70,flexShrink:0}}>{portions} portions</div>
+              </div>
+            ))}
           </div>
         </div>
       )}
-
-      {/* Empty state */}
-      {items.length===0 && (
-        <div style={{textAlign:"center",padding:"44px 0",color:"rgba(255,255,255,.18)",fontSize:12}}>No items in any freezer yet</div>
-      )}
+      {items.length===0 && <div style={{textAlign:"center",padding:"44px 0",color:"rgba(255,255,255,.18)",fontSize:12}}>No items in any freezer yet</div>}
     </div>
   );
 }
