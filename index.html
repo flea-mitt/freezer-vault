@@ -1016,7 +1016,7 @@ function OverviewPanel({items,allExpiring,totalPortions,lowStock,expiryInfo,getZ
   const totalBags=items.reduce((s,i)=>s+Number(i.bags||1),0);
   const freezerStats=Object.values(FREEZERS).map(fz=>{
     const fzItems=items.filter(i=>i.freezer===fz.id);
-    return {fz,count:fzItems.length,portions:fzItems.reduce((s,i)=>s+(Number(i.bags||1)*Number(i.qty)),0),expiring:fzItems.filter(i=>{const d=daysUntil(i.bestBefore);return d!==null&&d<=7;}).length};
+    return {fz,count:fzItems.length,bags:fzItems.reduce((s,i)=>s+Number(i.bags||1),0),expiring:fzItems.filter(i=>{const d=daysUntil(i.bestBefore);return d!==null&&d<=7;}).length};
   });
   // Build group summary
   const groupSummary = [];
@@ -1068,14 +1068,14 @@ function OverviewPanel({items,allExpiring,totalPortions,lowStock,expiryInfo,getZ
         ))}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-        {freezerStats.map(({fz,count,portions,expiring})=>(
+        {freezerStats.map(({fz,count,bags,expiring})=>(
           <div key={fz.id} style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",borderRadius:12,padding:"14px 16px"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
               <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:"#BAE6FD"}}>{fz.icon} {fz.label}</div>
               {expiring>0 && <span className="pulse" style={{fontSize:10,color:"#FB923C",background:"rgba(251,146,60,.15)",border:"1px solid rgba(251,146,60,.3)",borderRadius:10,padding:"2px 8px"}}>⚠ {expiring} expiring</span>}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-              {[["Items",count],["Portions",portions]].map(([l,v])=>(
+              {[["Items",count],["Bags",bags]].map(([l,v])=>(
                 <div key={l}><div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginBottom:2}}>{l}</div><div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:20,color:"#7DD3FC"}}>{v}</div></div>
               ))}
             </div>
