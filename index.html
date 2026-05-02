@@ -252,7 +252,7 @@ function App() {
   const [search,        setSearch]       = useState("");
   const [filterCat,     setFilterCat]    = useState("all");
   const [clock,         setClock]        = useState(new Date());
-  const [extraCategories, setExtraCategories] = useState([]);
+  const [storedCategories, setStoredCategories] = useState(null);
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 30000);
@@ -261,11 +261,11 @@ function App() {
 
   useEffect(() => {
     db.collection("config").doc("settings").get()
-      .then(snap => { if (snap.exists) setExtraCategories(snap.data().extraCategories || []); })
+      .then(snap => { if (snap.exists && snap.data().categories) setStoredCategories(snap.data().categories); })
       .catch(() => {});
   }, []);
 
-  const allCategories = [...CATEGORIES, ...extraCategories];
+  const allCategories = storedCategories ?? CATEGORIES;
 
   useEffect(() => {
     const on = () => setOnline(true), off = () => setOnline(false);
@@ -649,7 +649,7 @@ function App() {
         )}
 
         {activeFreezer==="admin" && isOwner && (
-          <AdminPanel db={db} allCategories={allCategories} extraCategories={extraCategories} setExtraCategories={setExtraCategories}/>
+          <AdminPanel db={db} allCategories={allCategories} setStoredCategories={setStoredCategories}/>
         )}
 
         {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="map" && (
@@ -1241,11 +1241,17 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
   );
 }
 
-function AdminPanel({db, allCategories, extraCategories, setExtraCategories}) {
+function AdminPanel({db, allCategories, setStoredCategories}) {
   const [newCat,   setNewCat]   = useState("");
-  const [saving,   setSaving]   = useState(false);
-  const [deleting, setDeleting] = useState(null);
+  const [editIdx,  setEditIdx]  = useState(null);
+  const [editVal,  setEditVal]  = useState("");
+  const [busy,     setBusy]     = useState(false);
   const [error,    setError]    = useState("");
+
+  async function persist(updated) {
+    await db.collection("config").doc("settings").set({categories: updated}, {merge: true});
+    setStoredCategories(updated);
+  }
 
   async function addCategory() {
     const trimmed = newCat.trim();
@@ -1253,48 +1259,62 @@ function AdminPanel({db, allCategories, extraCategories, setExtraCategories}) {
     if (allCategories.map(c=>c.toLowerCase()).includes(trimmed.toLowerCase())) {
       setError("Category already exists."); return;
     }
-    setSaving(true); setError("");
-    const updated = [...extraCategories, trimmed];
-    try {
-      await db.collection("config").doc("settings").set({extraCategories: updated}, {merge: true});
-      setExtraCategories(updated); setNewCat("");
-    } catch(e) { setError("Save failed: " + e.message); }
-    setSaving(false);
+    setBusy(true); setError("");
+    try { await persist([...allCategories, trimmed]); setNewCat(""); }
+    catch(e) { setError("Save failed: " + e.message); }
+    setBusy(false);
   }
 
-  async function deleteCategory(cat) {
-    setDeleting(cat);
-    const updated = extraCategories.filter(c => c !== cat);
-    try {
-      await db.collection("config").doc("settings").set({extraCategories: updated}, {merge: true});
-      setExtraCategories(updated);
-    } catch(e) { setError("Delete failed: " + e.message); }
-    setDeleting(null);
+  function startEdit(idx) { setEditIdx(idx); setEditVal(allCategories[idx]); setError(""); }
+  function cancelEdit()   { setEditIdx(null); setEditVal(""); }
+
+  async function confirmEdit() {
+    const trimmed = editVal.trim();
+    if (!trimmed) return;
+    const duplicate = allCategories.some((c,i) => i !== editIdx && c.toLowerCase() === trimmed.toLowerCase());
+    if (duplicate) { setError("Category already exists."); return; }
+    setBusy(true); setError("");
+    const updated = allCategories.map((c,i) => i === editIdx ? trimmed : c);
+    try { await persist(updated); setEditIdx(null); setEditVal(""); }
+    catch(e) { setError("Save failed: " + e.message); }
+    setBusy(false);
+  }
+
+  async function deleteCategory(idx) {
+    setBusy(true); setError("");
+    try { await persist(allCategories.filter((_,i) => i !== idx)); }
+    catch(e) { setError("Delete failed: " + e.message); }
+    setBusy(false);
   }
 
   return (
     <div style={{maxWidth:560}}>
       <div className="lbl" style={{color:"rgba(125,211,252,.4)",marginBottom:16,fontSize:9}}>Admin</div>
 
-      {/* Categories */}
       <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.1)",borderRadius:12,padding:"16px 18px"}}>
         <div className="lbl" style={{color:"#7DD3FC",marginBottom:14,fontSize:9}}>Categories</div>
 
         <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:16}}>
-          {allCategories.map(cat => {
-            const isCustom = extraCategories.includes(cat);
-            return (
-              <div key={cat} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",background:"rgba(255,255,255,.03)",borderRadius:7,border:"1px solid rgba(125,211,252,.07)"}}>
-                <span style={{fontSize:13,color: isCustom?"#A7F3D0":"#BAE6FD"}}>{cat}</span>
-                {isCustom
-                  ? <button className="btn btn-danger" style={{fontSize:11,padding:"3px 9px"}} disabled={deleting===cat} onClick={()=>deleteCategory(cat)}>
-                      {deleting===cat ? "…" : "Remove"}
-                    </button>
-                  : <span style={{fontSize:10,color:"rgba(255,255,255,.2)"}}>default</span>
-                }
-              </div>
-            );
-          })}
+          {allCategories.map((cat, idx) => (
+            <div key={idx} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"rgba(255,255,255,.03)",borderRadius:7,border:`1px solid ${editIdx===idx?"rgba(125,211,252,.3)":"rgba(125,211,252,.07)"}`}}>
+              {editIdx === idx ? (
+                <>
+                  <input className="inp" value={editVal} autoFocus
+                    onChange={e=>{setEditVal(e.target.value);setError("");}}
+                    onKeyDown={e=>{if(e.key==="Enter")confirmEdit();if(e.key==="Escape")cancelEdit();}}
+                    style={{flex:1,padding:"4px 8px",fontSize:13}}/>
+                  <button className="btn btn-primary" style={{fontSize:11,padding:"3px 9px"}} onClick={confirmEdit} disabled={busy||!editVal.trim()}>✓</button>
+                  <button className="btn btn-ghost"   style={{fontSize:11,padding:"3px 9px"}} onClick={cancelEdit}>✕</button>
+                </>
+              ) : (
+                <>
+                  <span style={{flex:1,fontSize:13,color:"#BAE6FD"}}>{cat}</span>
+                  <button className="btn btn-ghost"   style={{fontSize:11,padding:"3px 9px"}} disabled={busy} onClick={()=>startEdit(idx)}>Edit</button>
+                  <button className="btn btn-danger"  style={{fontSize:11,padding:"3px 9px"}} disabled={busy} onClick={()=>deleteCategory(idx)}>✕</button>
+                </>
+              )}
+            </div>
+          ))}
         </div>
 
         <div style={{display:"flex",gap:8}}>
@@ -1302,8 +1322,8 @@ function AdminPanel({db, allCategories, extraCategories, setExtraCategories}) {
             onChange={e=>{setNewCat(e.target.value);setError("");}}
             onKeyDown={e=>e.key==="Enter"&&addCategory()}
             style={{flex:1}}/>
-          <button className="btn btn-primary" onClick={addCategory} disabled={saving||!newCat.trim()}>
-            {saving ? "…" : "Add"}
+          <button className="btn btn-primary" onClick={addCategory} disabled={busy||!newCat.trim()}>
+            {busy ? "…" : "Add"}
           </button>
         </div>
         {error && <div style={{marginTop:8,fontSize:12,color:"#F87171"}}>{error}</div>}
