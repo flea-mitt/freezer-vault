@@ -190,7 +190,9 @@ function fmtTime(ts) {
 const INIT = {
   name:"", freezer:"chest", zone:"basket", category:"Cooked Meals",
   bags:1, qty:1, unit:"portions", dateFrozen:todayStr(), bestBefore:"",
-  notify:false, minBags:1, notes:""
+  notify:false, minBags:1,
+  calories:"", protein:"", carbs:"", fat:"",
+  recipeUrl:"", notes:""
 };
 
 function App() {
@@ -336,7 +338,9 @@ function App() {
         bags:Number(form.bags)||1, qty:Number(form.qty), unit:form.unit,
         dateFrozen:form.dateFrozen, bestBefore:form.bestBefore||"",
         notify:form.notify||false, minBags:Number(form.minBags)||1,
-        notes:form.notes||"",
+        calories:form.calories||"", protein:form.protein||"",
+        carbs:form.carbs||"", fat:form.fat||"",
+        recipeUrl:form.recipeUrl||"", notes:form.notes||"",
         updatedAt:firebase.firestore.FieldValue.serverTimestamp()
       };
       if (editId) { await db.collection("items").doc(editId).update(payload); }
@@ -380,7 +384,9 @@ function App() {
   function openEdit(item) {
     setForm({name:item.name,freezer:item.freezer,zone:item.zone,category:item.category||"Other",
       bags:item.bags||1,qty:item.qty,unit:item.unit,dateFrozen:item.dateFrozen||todayStr(),bestBefore:item.bestBefore||"",
-      notify:item.notify||false,minBags:item.minBags||1,notes:item.notes||""});
+      notify:item.notify||false,minBags:item.minBags||1,
+      calories:item.calories||"",protein:item.protein||"",carbs:item.carbs||"",fat:item.fat||"",
+      recipeUrl:item.recipeUrl||"",notes:item.notes||""});
     setEditId(item.id); setShowForm(true);
   }
 
@@ -721,6 +727,25 @@ function App() {
                 <input className="inp" placeholder="e.g. ×2 servings, labelled A…" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/>
               </Field>
 
+              {/* Nutrition */}
+              <div style={{borderTop:"1px solid rgba(125,211,252,.08)",paddingTop:12}}>
+                <div className="lbl" style={{color:"rgba(125,211,252,.4)",fontSize:9,marginBottom:10}}>Nutrition (per portion, optional)</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
+                  {[["KCAL","calories","e.g. 450"],["PROTEIN","protein","g"],["CARBS","carbs","g"],["FAT","fat","g"]].map(([label,key,ph])=>(
+                    <Field key={key} label={label}>
+                      <input className="inp" placeholder={ph} value={form[key]}
+                        onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}/>
+                    </Field>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recipe link */}
+              <Field label="RECIPE LINK (optional)">
+                <input className="inp" placeholder="https://..." value={form.recipeUrl}
+                  onChange={e=>setForm(f=>({...f,recipeUrl:e.target.value}))}/>
+              </Field>
+
               {/* Low stock notification */}
               <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.1)",borderRadius:8,padding:"12px"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:form.notify?10:0}}>
@@ -836,6 +861,27 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
             {item.dateFrozen && <><span style={{color:"rgba(255,255,255,.18)",fontSize:10}}>·</span><span style={{fontSize:10,color:"rgba(255,255,255,.28)"}}>{frozenLabel(item.dateFrozen)}</span></>}
           </div>
           {item.notes && <div style={{fontSize:11,color:"rgba(255,255,255,.26)",marginTop:4,fontStyle:"italic"}}>{item.notes}</div>}
+          {/* Nutrition row */}
+          {(item.calories||item.protein||item.carbs||item.fat) && (
+            <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
+              {[["🔥",item.calories,"kcal"],["💪",item.protein,"p"],["🌾",item.carbs,"c"],["🧈",item.fat,"f"]].map(([icon,val,unit])=>
+                val ? (
+                  <div key={unit} style={{fontSize:10,color:"rgba(255,255,255,.45)",background:"rgba(255,255,255,.05)",borderRadius:6,padding:"2px 7px",display:"flex",alignItems:"center",gap:3}}>
+                    <span>{icon}</span><span style={{color:"#E0F2FE",fontWeight:500}}>{val}</span><span>{unit}</span>
+                  </div>
+                ) : null
+              )}
+            </div>
+          )}
+          {/* Recipe link */}
+          {item.recipeUrl && (
+            <a href={item.recipeUrl} target="_blank" rel="noopener noreferrer"
+              style={{display:"inline-flex",alignItems:"center",gap:4,marginTop:5,fontSize:10,color:"#38BDF8",textDecoration:"none",opacity:.8}}
+              onMouseEnter={e=>e.currentTarget.style.opacity=1}
+              onMouseLeave={e=>e.currentTarget.style.opacity=.8}>
+              📖 View recipe
+            </a>
+          )}
         </div>
         {isOwner && (
           <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:5,flexShrink:0}}>
