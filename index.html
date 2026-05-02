@@ -347,6 +347,8 @@ function App() {
       });
     } catch(e) { console.warn("History log failed:", e); }
   }
+
+  async function saveItem() {
     if (!form.name.trim()) return;
     setSyncing(true);
     try {
