@@ -605,11 +605,11 @@ function App() {
       {/* FREEZER TABS */}
       <div style={{padding:"9px 20px 0",display:"flex",gap:6,background:"rgba(0,0,0,.1)",borderBottom:"1px solid rgba(125,211,252,.05)"}}>
         <button className={`tab ${activeFreezer==="overview"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("overview");setAZ(null);}}>📊 Overview</button>
-        <button className={`tab ${activeFreezer==="stockwatch"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("stockwatch");setAZ(null);}}>🔔 Stock Watch</button>
-        <button className={`tab ${activeFreezer==="history"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("history");setAZ(null);}}>📋 History</button>
         {Object.values(FREEZERS).map(f=>(
           <button key={f.id} className={`tab ${activeFreezer===f.id?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF(f.id);setAZ(null);}}>{f.icon} {f.label}</button>
         ))}
+        <button className={`tab ${activeFreezer==="stockwatch"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("stockwatch");setAZ(null);}}>🔔 Stock Watch</button>
+        <button className={`tab ${activeFreezer==="history"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("history");setAZ(null);}}>📋 History</button>
       </div>
 
       {/* FILTERS */}
