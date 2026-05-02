@@ -345,7 +345,12 @@ function App() {
         updatedAt:firebase.firestore.FieldValue.serverTimestamp()
       };
       if (editId) { await db.collection("items").doc(editId).update(payload); }
-      else { payload.createdAt = firebase.firestore.FieldValue.serverTimestamp(); await db.collection("items").add(payload); }
+      else {
+        payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+        payload.addedBy = authUser?.displayName || "Unknown";
+        payload.addedByEmail = authUser?.email || "";
+        await db.collection("items").add(payload);
+      }
     } catch(e) { alert("Save failed: " + e.message); }
     setSyncing(false); setShowForm(false); setEditId(null); setForm(INIT);
   }
@@ -566,6 +571,7 @@ function App() {
       {/* FREEZER TABS */}
       <div style={{padding:"9px 20px 0",display:"flex",gap:6,background:"rgba(0,0,0,.1)",borderBottom:"1px solid rgba(125,211,252,.05)"}}>
         <button className={`tab ${activeFreezer==="overview"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("overview");setAZ(null);}}>📊 Overview</button>
+        <button className={`tab ${activeFreezer==="stockwatch"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("stockwatch");setAZ(null);}}>🔔 Stock Watch</button>
         {Object.values(FREEZERS).map(f=>(
           <button key={f.id} className={`tab ${activeFreezer===f.id?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF(f.id);setAZ(null);}}>{f.icon} {f.label}</button>
         ))}
@@ -589,7 +595,11 @@ function App() {
           <OverviewPanel items={items} allExpiring={allExpiring} totalPortions={totalPortions} lowStock={lowStock} expiryInfo={expiryInfo} getZone={getZone} CATEGORIES={CATEGORIES} FREEZERS={FREEZERS} daysUntil={daysUntil}/>
         )}
 
-        {activeFreezer!=="overview" && view==="map" && (
+        {activeFreezer==="stockwatch" && (
+          <StockWatchPanel items={items} FREEZERS={FREEZERS} getZone={getZone} groupBagCount={groupBagCount} openEdit={isOwner?openEdit:null}/>
+        )}
+
+        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && view==="map" && (
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
             <div style={{flex:"0 0 auto"}}>
               <div className="lbl" style={{color:"rgba(125,211,252,.3)",marginBottom:9,fontSize:9}}>{fz.label} · {activeFreezer==="chest"?"Top View":"Front View"}</div>
@@ -632,7 +642,7 @@ function App() {
           </div>
         )}
 
-        {activeFreezer!=="overview" && view==="list" && (
+        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && view==="list" && (
           <div>
             {fz.zones.map(zone=>{
               const zi=zoneItems(fz.id,zone.id);
@@ -893,6 +903,11 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
             {item.dateFrozen && <><span style={{color:"rgba(255,255,255,.18)",fontSize:10}}>·</span><span style={{fontSize:10,color:"rgba(255,255,255,.28)"}}>{frozenLabel(item.dateFrozen)}</span></>}
           </div>
           {item.notes && <div style={{fontSize:11,color:"rgba(255,255,255,.26)",marginTop:4,fontStyle:"italic"}}>{item.notes}</div>}
+          {item.addedBy && (
+            <div style={{fontSize:10,color:"rgba(255,255,255,.2)",marginTop:4,display:"flex",alignItems:"center",gap:4}}>
+              <span>👤</span><span>{item.addedBy}</span>
+            </div>
+          )}
           {/* Nutrition row */}
           {(item.calories||item.protein||item.carbs||item.fat) && (
             <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
@@ -1016,6 +1031,95 @@ function OverviewPanel({items,allExpiring,totalPortions,lowStock,expiryInfo,getZ
         </div>
       )}
       {items.length===0 && <div style={{textAlign:"center",padding:"44px 0",color:"rgba(255,255,255,.18)",fontSize:12}}>No items in any freezer yet</div>}
+    </div>
+  );
+}
+
+function StockWatchPanel({items, FREEZERS, getZone, groupBagCount, openEdit}) {
+  // All items with notify on
+  const watchedItems = items.filter(it => it.notify);
+
+  // Build deduplicated list — grouped items appear once, ungrouped appear individually
+  const seen = new Set();
+  const watchList = [];
+  for (const item of watchedItems) {
+    const key = item.group || item.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (item.group) {
+      // Collect all items in this group
+      const groupItems = watchedItems.filter(i => i.group === item.group);
+      const totalBags  = groupItems.reduce((s,i) => s + (i.bags||1), 0);
+      const minBags    = Math.max(...groupItems.map(i => i.minBags||1));
+      watchList.push({ type:"group", key, name:item.group, totalBags, minBags, items:groupItems });
+    } else {
+      watchList.push({ type:"single", key, name:item.name, totalBags:item.bags||1, minBags:item.minBags||1, items:[item] });
+    }
+  }
+
+  if (watchList.length === 0) return (
+    <div style={{textAlign:"center",padding:"44px 0",color:"rgba(255,255,255,.2)",fontSize:12}}>
+      <div style={{fontSize:28,marginBottom:10,opacity:.3}}>🔔</div>
+      No items on the watch list yet.<br/>
+      <span style={{fontSize:11,opacity:.6}}>Turn on "Notify when low" when adding or editing an item.</span>
+    </div>
+  );
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div className="lbl" style={{color:"rgba(125,211,252,.4)",fontSize:9}}>
+          {watchList.length} watched · {watchList.filter(w=>w.totalBags<=w.minBags).length} currently low
+        </div>
+      </div>
+
+      {watchList.map(entry => {
+        const isLow   = entry.totalBags <= entry.minBags;
+        const pct     = Math.min(100, (entry.totalBags / Math.max(1, entry.minBags * 2)) * 100);
+        const barColor= isLow ? "#F87171" : entry.totalBags <= entry.minBags * 1.5 ? "#FB923C" : "#4ADE80";
+
+        return (
+          <div key={entry.key} style={{background:"rgba(255,255,255,.04)",border:`1px solid ${isLow?"rgba(248,113,113,.3)":"rgba(125,211,252,.1)"}`,borderRadius:12,padding:"14px 16px"}}>
+
+            {/* Header row */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {entry.type==="group" && <span style={{fontSize:10,color:"rgba(255,255,255,.3)",background:"rgba(255,255,255,.06)",borderRadius:6,padding:"2px 7px"}}>⛓ group</span>}
+                <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,color:isLow?"#F87171":"#BAE6FD"}}>{entry.name}</span>
+                {isLow && <span className="pulse" style={{fontSize:10,color:"#F87171",background:"rgba(248,113,113,.15)",border:"1px solid rgba(248,113,113,.3)",borderRadius:10,padding:"1px 8px"}}>🔔 LOW</span>}
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:22,color:barColor,lineHeight:1}}>{entry.totalBags}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,.3)"}}>of {entry.minBags} min</div>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{height:5,background:"rgba(255,255,255,.07)",borderRadius:3,overflow:"hidden",marginBottom:12}}>
+              <div style={{height:"100%",width:`${pct}%`,background:barColor,borderRadius:3,transition:"width .3s"}}/>
+            </div>
+
+            {/* Individual items in group */}
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {entry.items.map(it => {
+                const zone = getZone(it.freezer, it.zone);
+                const fz   = FREEZERS[it.freezer];
+                return (
+                  <div key={it.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",background:"rgba(0,0,0,.15)",borderRadius:7}}>
+                    <span style={{fontSize:11,color:"rgba(255,255,255,.5)",flexShrink:0}}>{fz?.icon} {zone?.label}</span>
+                    <span style={{flex:1,fontSize:11,color:"rgba(255,255,255,.7)"}}>{it.name}</span>
+                    <span style={{fontSize:11,color:"#7DD3FC",fontWeight:500}}>{it.bags||1} bag{(it.bags||1)!==1?"s":""}</span>
+                    {it.addedBy && <span style={{fontSize:10,color:"rgba(255,255,255,.25)"}}>👤 {it.addedBy}</span>}
+                    {openEdit && (
+                      <button className="btn btn-ghost" style={{padding:"2px 8px",fontSize:10}} onClick={()=>openEdit(it)}>edit</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
