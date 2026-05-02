@@ -1048,14 +1048,17 @@ function OverviewPanel({items,allExpiring,totalPortions,lowStock,expiryInfo,getZ
     return { cat, count: typeCount, portions };
   }).filter(Boolean).sort((a,b) => b.count - a.count);
 
+  const cookedPortions  = items.filter(i=>i.category==="Cooked Meals").reduce((s,i)=>s+(Number(i.bags||1)*Number(i.qty||1)),0);
+  const proteinPortions = items.filter(i=>i.category==="Proteins").reduce((s,i)=>s+(Number(i.bags||1)*Number(i.qty||1)),0);
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
         {[
-          {label:"Total Items",   value:items.length,      sub:"across all freezers", color:"#BAE6FD"},
-          {label:"Total Bags",    value:totalBags,          sub:"individual containers",color:"#BAE6FD"},
-          {label:"Total Portions",value:totalPortions,      sub:"combined",            color:"#BAE6FD"},
-          {label:"Low Stock",     value:lowStock.length,    sub:"need restocking",     color:lowStock.length>0?"#F87171":"#4ADE80"},
+          {label:"Cooked Meal Portions", value:cookedPortions,    sub:"Cooked Meals category",  color:"#BAE6FD"},
+          {label:"Total Bags",           value:totalBags,          sub:"individual containers",  color:"#BAE6FD"},
+          {label:"Protein Portions",     value:proteinPortions,    sub:"Proteins category",      color:"#BAE6FD"},
+          {label:"Low Stock",            value:lowStock.length,    sub:"need restocking",        color:lowStock.length>0?"#F87171":"#4ADE80"},
         ].map(({label,value,sub,color})=>(
           <div key={label} style={{background:"rgba(255,255,255,.04)",border:`1px solid ${color==="#F87171"&&value>0?"rgba(248,113,113,.25)":"rgba(125,211,252,.1)"}`,borderRadius:12,padding:"14px 16px"}}>
             <div className="lbl" style={{color:"rgba(125,211,252,.45)",fontSize:9,marginBottom:6}}>{label}</div>
