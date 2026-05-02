@@ -329,7 +329,24 @@ function App() {
     return () => unsub();
   }, []);
 
-  async function saveItem() {
+  // Audit log helper
+  async function logHistory(action, item, extra={}) {
+    try {
+      await db.collection("history").add({
+        action,
+        itemName: item.name || extra.name || "Unknown",
+        itemId:   item.id   || "",
+        freezer:  item.freezer || "",
+        zone:     item.zone    || "",
+        category: item.category|| "",
+        bags:     item.bags    || 1,
+        ...extra,
+        performedBy:      authUser?.displayName || "Unknown",
+        performedByEmail: authUser?.email       || "",
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    } catch(e) { console.warn("History log failed:", e); }
+  }
     if (!form.name.trim()) return;
     setSyncing(true);
     try {
@@ -344,12 +361,15 @@ function App() {
         recipeUrl:form.recipeUrl||"", notes:form.notes||"",
         updatedAt:firebase.firestore.FieldValue.serverTimestamp()
       };
-      if (editId) { await db.collection("items").doc(editId).update(payload); }
-      else {
+      if (editId) {
+        await db.collection("items").doc(editId).update(payload);
+        await logHistory("edited", payload, {itemId:editId, changes: JSON.stringify(payload)});
+      } else {
         payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
         payload.addedBy = authUser?.displayName || "Unknown";
         payload.addedByEmail = authUser?.email || "";
-        await db.collection("items").add(payload);
+        const ref = await db.collection("items").add(payload);
+        await logHistory("added", payload, {itemId:ref.id});
       }
     } catch(e) { alert("Save failed: " + e.message); }
     setSyncing(false); setShowForm(false); setEditId(null); setForm(INIT);
@@ -357,7 +377,12 @@ function App() {
 
   async function del(id) {
     setSyncing(true);
-    try { await db.collection("items").doc(id).delete(); } catch(e) {}
+    try {
+      const snap = await db.collection("items").doc(id).get();
+      const item = snap.exists ? {id, ...snap.data()} : {id, name:"Unknown"};
+      await db.collection("items").doc(id).delete();
+      await logHistory("removed", item);
+    } catch(e) {}
     setSyncing(false);
   }
 
@@ -365,8 +390,15 @@ function App() {
     const n = Math.max(0, currentBags + delta);
     setSyncing(true);
     try {
-      if (n === 0) { await db.collection("items").doc(id).delete(); }
-      else { await db.collection("items").doc(id).update({bags:n, updatedAt:firebase.firestore.FieldValue.serverTimestamp()}); }
+      const snap = await db.collection("items").doc(id).get();
+      const item = snap.exists ? {id, ...snap.data()} : {id, name:"Unknown"};
+      if (n === 0) {
+        await db.collection("items").doc(id).delete();
+        await logHistory("removed", item, {note:"Last bag used"});
+      } else {
+        await db.collection("items").doc(id).update({bags:n, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+        await logHistory(delta > 0 ? "bags_added" : "bags_removed", item, {from:currentBags, to:n});
+      }
     } catch(e) {}
     setSyncing(false);
   }
@@ -572,6 +604,7 @@ function App() {
       <div style={{padding:"9px 20px 0",display:"flex",gap:6,background:"rgba(0,0,0,.1)",borderBottom:"1px solid rgba(125,211,252,.05)"}}>
         <button className={`tab ${activeFreezer==="overview"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("overview");setAZ(null);}}>📊 Overview</button>
         <button className={`tab ${activeFreezer==="stockwatch"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("stockwatch");setAZ(null);}}>🔔 Stock Watch</button>
+        <button className={`tab ${activeFreezer==="history"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("history");setAZ(null);}}>📋 History</button>
         {Object.values(FREEZERS).map(f=>(
           <button key={f.id} className={`tab ${activeFreezer===f.id?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF(f.id);setAZ(null);}}>{f.icon} {f.label}</button>
         ))}
@@ -599,7 +632,11 @@ function App() {
           <StockWatchPanel items={items} FREEZERS={FREEZERS} getZone={getZone} groupBagCount={groupBagCount} openEdit={isOwner?openEdit:null}/>
         )}
 
-        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && view==="map" && (
+        {activeFreezer==="history" && (
+          <HistoryPanel db={db} FREEZERS={FREEZERS} getZone={getZone}/>
+        )}
+
+        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && view==="map" && (
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
             <div style={{flex:"0 0 auto"}}>
               <div className="lbl" style={{color:"rgba(125,211,252,.3)",marginBottom:9,fontSize:9}}>{fz.label} · {activeFreezer==="chest"?"Top View":"Front View"}</div>
@@ -642,7 +679,7 @@ function App() {
           </div>
         )}
 
-        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && view==="list" && (
+        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && view==="list" && (
           <div>
             {fz.zones.map(zone=>{
               const zi=zoneItems(fz.id,zone.id);
@@ -1184,6 +1221,141 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function HistoryPanel({db, FREEZERS, getZone}) {
+  const [entries,  setEntries]  = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [hasMore,  setHasMore]  = useState(false);
+  const [lastDoc,  setLastDoc]  = useState(null);
+  const PAGE = 30;
+
+  useEffect(() => {
+    setLoading(true);
+    db.collection("history")
+      .orderBy("timestamp", "desc")
+      .limit(PAGE)
+      .get()
+      .then(snap => {
+        setEntries(snap.docs.map(d => ({id:d.id,...d.data()})));
+        setHasMore(snap.docs.length === PAGE);
+        setLastDoc(snap.docs[snap.docs.length-1] || null);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  async function loadMore() {
+    if (!lastDoc) return;
+    const snap = await db.collection("history")
+      .orderBy("timestamp","desc")
+      .startAfter(lastDoc)
+      .limit(PAGE)
+      .get();
+    setEntries(p => [...p, ...snap.docs.map(d=>({id:d.id,...d.data()}))]);
+    setHasMore(snap.docs.length === PAGE);
+    setLastDoc(snap.docs[snap.docs.length-1] || null);
+  }
+
+  const ACTION_META = {
+    added:        { label:"Added",         color:"#4ADE80", icon:"＋" },
+    removed:      { label:"Removed",       color:"#F87171", icon:"−" },
+    edited:       { label:"Edited",        color:"#FDE68A", icon:"✎" },
+    bags_added:   { label:"Bags added",    color:"#7DD3FC", icon:"↑" },
+    bags_removed: { label:"Bags removed",  color:"#FB923C", icon:"↓" },
+  };
+
+  function fmtTs(ts) {
+    if (!ts) return "—";
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const now = new Date();
+    const diff = Math.floor((now - d) / 60000);
+    if (diff < 1)   return "just now";
+    if (diff < 60)  return `${diff}m ago`;
+    if (diff < 1440) return `${Math.floor(diff/60)}h ago`;
+    return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:diff>525600?"numeric":undefined}) + " " +
+           d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
+  }
+
+  if (loading) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"44px 0",color:"#7DD3FC",gap:10}}>
+      <span className="spin">↻</span> Loading history…
+    </div>
+  );
+
+  if (entries.length === 0) return (
+    <div style={{textAlign:"center",padding:"44px 0",color:"rgba(255,255,255,.2)",fontSize:12}}>
+      <div style={{fontSize:28,marginBottom:10,opacity:.3}}>📋</div>
+      No history yet — actions will appear here as you use the app
+    </div>
+  );
+
+  // Group entries by date
+  const grouped = [];
+  let currentDate = null;
+  for (const entry of entries) {
+    const d    = entry.timestamp?.toDate?.() || new Date();
+    const date = d.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+    if (date !== currentDate) { grouped.push({type:"date",label:date}); currentDate = date; }
+    grouped.push({type:"entry",entry});
+  }
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:2,maxWidth:700}}>
+      {grouped.map((row,i) => {
+        if (row.type === "date") return (
+          <div key={i} style={{fontSize:10,color:"rgba(255,255,255,.25)",letterSpacing:".06em",fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,padding:"14px 0 6px",textTransform:"uppercase"}}>
+            {row.label}
+          </div>
+        );
+
+        const {entry} = row;
+        const meta    = ACTION_META[entry.action] || {label:entry.action, color:"#7DD3FC", icon:"•"};
+        const fz      = FREEZERS[entry.freezer];
+        const zone    = getZone(entry.freezer, entry.zone);
+
+        return (
+          <div key={entry.id} style={{display:"flex",alignItems:"flex-start",gap:12,padding:"10px 12px",background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.07)",borderRadius:9,transition:"background .15s"}}
+            onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.06)"}
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,.03)"}>
+
+            {/* Action badge */}
+            <div style={{width:28,height:28,borderRadius:8,background:`${meta.color}18`,border:`1px solid ${meta.color}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:13,color:meta.color,fontWeight:700}}>
+              {meta.icon}
+            </div>
+
+            {/* Content */}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                <span style={{fontSize:12,color:meta.color,fontWeight:600}}>{meta.label}</span>
+                <span style={{fontSize:13,color:"#E0F2FE",fontWeight:500}}>{entry.itemName}</span>
+                {entry.action==="bags_added"   && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} bags)</span>}
+                {entry.action==="bags_removed" && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} bags)</span>}
+                {entry.note && <span style={{fontSize:11,color:"rgba(255,255,255,.35)",fontStyle:"italic"}}>{entry.note}</span>}
+              </div>
+              <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap",alignItems:"center"}}>
+                {fz && <span style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{fz.icon} {fz.label}{zone?` · ${zone.label}`:""}</span>}
+                {entry.category && <><span style={{color:"rgba(255,255,255,.15)",fontSize:10}}>·</span><span style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{entry.category}</span></>}
+                {entry.bags && entry.action==="added" && <><span style={{color:"rgba(255,255,255,.15)",fontSize:10}}>·</span><span style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{entry.bags} bag{entry.bags!==1?"s":""}</span></>}
+              </div>
+            </div>
+
+            {/* Right side: user + time */}
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>{entry.performedBy}</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,.25)",marginTop:2}}>{fmtTs(entry.timestamp)}</div>
+            </div>
+          </div>
+        );
+      })}
+
+      {hasMore && (
+        <button className="btn btn-ghost" style={{marginTop:10,alignSelf:"center"}} onClick={loadMore}>
+          Load more
+        </button>
+      )}
     </div>
   );
 }
