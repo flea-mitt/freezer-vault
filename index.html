@@ -496,7 +496,7 @@ function App() {
               </div>
             )}
             <button className="btn btn-ghost" style={{fontSize:11}} onClick={()=>setKiosk(false)}>✕ Exit</button>
-            <button className="btn btn-primary" onClick={()=>openAdd(activeZone)}>+ Add</button>
+            {isOwner && <button className="btn btn-primary" onClick={()=>openAdd(activeZone)}>+ Add</button>}
           </div>
         </div>
       )}
@@ -636,7 +636,7 @@ function App() {
       </div>
 
       {/* MODAL */}
-      {showForm && (
+      {showForm && isOwner && (
         <div className="overlay" onClick={e=>{if(e.target===e.currentTarget){stopScanner();setShowForm(false);setEditId(null);}}}>
           <div className="modal">
             <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:16,marginBottom:18,color:"#BAE6FD"}}>{editId?"Edit Item":"Add to Freezer"}</div>
