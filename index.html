@@ -206,15 +206,20 @@ const INIT = {
 
 // ── App ─────────────────────────────────────────────────────────────
 function App() {
+  // Read URL params on load (for QR code deep links)
+  const urlParams = new URLSearchParams(window.location.search);
+  const initFreezer = FREEZERS[urlParams.get("freezer")] ? urlParams.get("freezer") : "chest";
+  const initZone    = urlParams.get("zone") || null;
+
   const [items,      setItems]    = useState([]);
   const [dbError,    setDbError]  = useState(null);
   const [loading,    setLoading]  = useState(true);
   const [online,     setOnline]   = useState(navigator.onLine);
   const [syncing,    setSyncing]  = useState(false);
   const [lastUpd,    setLastUpd]  = useState(null);
-  const [activeFreezer, setAF]    = useState("chest");
-  const [activeZone,    setAZ]    = useState(null);
-  const [view,       setView]     = useState("map");
+  const [activeFreezer, setAF]    = useState(initFreezer);
+  const [activeZone,    setAZ]    = useState(initZone);
+  const [view,       setView]     = useState(initZone ? "map" : "map");
   const [kiosk,      setKiosk]    = useState(false);
   const [showForm,   setShowForm] = useState(false);
   const [form,       setForm]     = useState(INIT);
