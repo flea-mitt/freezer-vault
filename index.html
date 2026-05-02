@@ -248,15 +248,24 @@ function App() {
   const [kiosk,      setKiosk]     = useState(false);
   const [showForm,   setShowForm]  = useState(false);
   const [form,       setForm]      = useState(INIT);
-  const [editId,     setEditId]    = useState(null);
-  const [search,     setSearch]    = useState("");
-  const [filterCat,  setFilterCat] = useState("all");
-  const [clock,      setClock]     = useState(new Date());
+  const [editId,        setEditId]       = useState(null);
+  const [search,        setSearch]       = useState("");
+  const [filterCat,     setFilterCat]    = useState("all");
+  const [clock,         setClock]        = useState(new Date());
+  const [extraCategories, setExtraCategories] = useState([]);
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    db.collection("config").doc("settings").get()
+      .then(snap => { if (snap.exists) setExtraCategories(snap.data().extraCategories || []); })
+      .catch(() => {});
+  }, []);
+
+  const allCategories = [...CATEGORIES, ...extraCategories];
 
   useEffect(() => {
     const on = () => setOnline(true), off = () => setOnline(false);
@@ -610,6 +619,7 @@ function App() {
         ))}
         <button className={`tab ${activeFreezer==="stockwatch"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("stockwatch");setAZ(null);}}>🔔 Stock Watch</button>
         <button className={`tab ${activeFreezer==="history"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("history");setAZ(null);}}>📋 History</button>
+        {isOwner && <button className={`tab ${activeFreezer==="admin"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("admin");setAZ(null);}}>⚙️ Admin</button>}
       </div>
 
       {/* FILTERS */}
@@ -618,7 +628,7 @@ function App() {
           <input className="inp" placeholder="🔍 Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{width:165}}/>
           <select className="inp" value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{width:185}}>
             <option value="all">All Categories</option>
-            {CATEGORIES.map(c=><option key={c}>{c}</option>)}
+            {allCategories.map(c=><option key={c}>{c}</option>)}
           </select>
         </div>
       )}
@@ -627,7 +637,7 @@ function App() {
       <div style={{padding:kiosk?"20px 24px":"15px 20px",flex:1,overflow:"auto"}}>
 
         {activeFreezer==="overview" && (
-          <OverviewPanel items={items} allExpiring={allExpiring} totalPortions={totalPortions} lowStock={lowStock} expiryInfo={expiryInfo} getZone={getZone} CATEGORIES={CATEGORIES} FREEZERS={FREEZERS} daysUntil={daysUntil}/>
+          <OverviewPanel items={items} allExpiring={allExpiring} totalPortions={totalPortions} lowStock={lowStock} expiryInfo={expiryInfo} getZone={getZone} CATEGORIES={allCategories} FREEZERS={FREEZERS} daysUntil={daysUntil}/>
         )}
 
         {activeFreezer==="stockwatch" && (
@@ -638,7 +648,11 @@ function App() {
           <HistoryPanel db={db} FREEZERS={FREEZERS} getZone={getZone}/>
         )}
 
-        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && view==="map" && (
+        {activeFreezer==="admin" && isOwner && (
+          <AdminPanel db={db} allCategories={allCategories} extraCategories={extraCategories} setExtraCategories={setExtraCategories}/>
+        )}
+
+        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="map" && (
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
             <div style={{flex:"0 0 auto"}}>
               <div className="lbl" style={{color:"rgba(125,211,252,.3)",marginBottom:9,fontSize:9}}>{fz.label} · {activeFreezer==="chest"?"Top View":"Front View"}</div>
@@ -681,7 +695,7 @@ function App() {
           </div>
         )}
 
-        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && view==="list" && (
+        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="list" && (
           <div>
             {fz.zones.map(zone=>{
               const zi=zoneItems(fz.id,zone.id);
@@ -748,7 +762,7 @@ function App() {
 
               <Field label="CATEGORY">
                 <select className="inp" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
-                  {CATEGORIES.map(c=><option key={c}>{c}</option>)}
+                  {allCategories.map(c=><option key={c}>{c}</option>)}
                 </select>
               </Field>
 
@@ -1222,6 +1236,77 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
             )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function AdminPanel({db, allCategories, extraCategories, setExtraCategories}) {
+  const [newCat,   setNewCat]   = useState("");
+  const [saving,   setSaving]   = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [error,    setError]    = useState("");
+
+  async function addCategory() {
+    const trimmed = newCat.trim();
+    if (!trimmed) return;
+    if (allCategories.map(c=>c.toLowerCase()).includes(trimmed.toLowerCase())) {
+      setError("Category already exists."); return;
+    }
+    setSaving(true); setError("");
+    const updated = [...extraCategories, trimmed];
+    try {
+      await db.collection("config").doc("settings").set({extraCategories: updated}, {merge: true});
+      setExtraCategories(updated); setNewCat("");
+    } catch(e) { setError("Save failed: " + e.message); }
+    setSaving(false);
+  }
+
+  async function deleteCategory(cat) {
+    setDeleting(cat);
+    const updated = extraCategories.filter(c => c !== cat);
+    try {
+      await db.collection("config").doc("settings").set({extraCategories: updated}, {merge: true});
+      setExtraCategories(updated);
+    } catch(e) { setError("Delete failed: " + e.message); }
+    setDeleting(null);
+  }
+
+  return (
+    <div style={{maxWidth:560}}>
+      <div className="lbl" style={{color:"rgba(125,211,252,.4)",marginBottom:16,fontSize:9}}>Admin</div>
+
+      {/* Categories */}
+      <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.1)",borderRadius:12,padding:"16px 18px"}}>
+        <div className="lbl" style={{color:"#7DD3FC",marginBottom:14,fontSize:9}}>Categories</div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:16}}>
+          {allCategories.map(cat => {
+            const isCustom = extraCategories.includes(cat);
+            return (
+              <div key={cat} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",background:"rgba(255,255,255,.03)",borderRadius:7,border:"1px solid rgba(125,211,252,.07)"}}>
+                <span style={{fontSize:13,color: isCustom?"#A7F3D0":"#BAE6FD"}}>{cat}</span>
+                {isCustom
+                  ? <button className="btn btn-danger" style={{fontSize:11,padding:"3px 9px"}} disabled={deleting===cat} onClick={()=>deleteCategory(cat)}>
+                      {deleting===cat ? "…" : "Remove"}
+                    </button>
+                  : <span style={{fontSize:10,color:"rgba(255,255,255,.2)"}}>default</span>
+                }
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{display:"flex",gap:8}}>
+          <input className="inp" placeholder="New category name…" value={newCat}
+            onChange={e=>{setNewCat(e.target.value);setError("");}}
+            onKeyDown={e=>e.key==="Enter"&&addCategory()}
+            style={{flex:1}}/>
+          <button className="btn btn-primary" onClick={addCategory} disabled={saving||!newCat.trim()}>
+            {saving ? "…" : "Add"}
+          </button>
+        </div>
+        {error && <div style={{marginTop:8,fontSize:12,color:"#F87171"}}>{error}</div>}
       </div>
     </div>
   );
