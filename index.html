@@ -666,6 +666,7 @@ function App() {
       {/* FREEZER TABS */}
       <div style={{padding:"9px 20px 0",display:"flex",gap:6,background:"rgba(0,0,0,.1)",borderBottom:"1px solid rgba(125,211,252,.05)"}}>
         <button className={`tab ${activeFreezer==="overview"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("overview");setAZ(null);}}>📊 Overview</button>
+        <button className={`tab ${activeFreezer==="priority"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("priority");setAZ(null);}}>⚡ Priority</button>
         {Object.values(FREEZERS).map(f=>(
           <button key={f.id} className={`tab ${activeFreezer===f.id?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF(f.id);setAZ(null);}}>{f.icon} {f.label}</button>
         ))}
@@ -696,6 +697,10 @@ function App() {
           <StockWatchPanel items={items} FREEZERS={FREEZERS} getZone={getZone} groupBagCount={groupBagCount} groupPortionsCount={groupPortionsCount} openEdit={isOwner?openEdit:null}/>
         )}
 
+        {activeFreezer==="priority" && (
+          <PriorityPanel items={items} CATEGORIES={allCategories} FREEZERS={FREEZERS} getZone={getZone} expiryInfo={expiryInfo} daysUntil={daysUntil} openEdit={isOwner?openEdit:null}/>
+        )}
+
         {activeFreezer==="history" && (
           <HistoryPanel db={db} FREEZERS={FREEZERS} getZone={getZone}/>
         )}
@@ -704,7 +709,7 @@ function App() {
           <AdminPanel db={db} allCategories={allCategories} setStoredCategories={setStoredCategories} usdaKey={usdaKey} setUsdaKey={setUsdaKey}/>
         )}
 
-        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="map" && (
+        {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="map" && (
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
             <div style={{flex:"0 0 auto"}}>
               <div className="lbl" style={{color:"rgba(125,211,252,.3)",marginBottom:9,fontSize:9}}>{fz.label} · {activeFreezer==="chest"?"Top View":"Front View"}</div>
@@ -747,7 +752,7 @@ function App() {
           </div>
         )}
 
-        {activeFreezer!=="overview" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="list" && (
+        {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="list" && (
           <div>
             {fz.zones.map(zone=>{
               const zi=zoneItems(fz.id,zone.id);
@@ -1320,6 +1325,93 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function PriorityPanel({items, CATEGORIES, FREEZERS, getZone, expiryInfo, daysUntil, openEdit}) {
+  const [timeFilter, setTimeFilter] = useState("30");
+  const [catFilter,  setCatFilter]  = useState("all");
+
+  const TIME_OPTIONS = [
+    {value:"expired", label:"Expired"},
+    {value:"7",       label:"Within 7 days"},
+    {value:"30",      label:"Within 30 days"},
+    {value:"90",      label:"Within 90 days"},
+    {value:"all",     label:"All with best before"},
+  ];
+
+  const filtered = items
+    .filter(it => {
+      if (!it.bestBefore) return false;
+      const d = daysUntil(it.bestBefore);
+      if (d === null) return false;
+      if (timeFilter === "expired") return d < 0;
+      if (timeFilter === "all")     return true;
+      return d <= Number(timeFilter);
+    })
+    .filter(it => catFilter === "all" || it.category === catFilter)
+    .sort((a,b) => (daysUntil(a.bestBefore)??9999) - (daysUntil(b.bestBefore)??9999));
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:700}}>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        <select className="inp" value={timeFilter} onChange={e=>setTimeFilter(e.target.value)} style={{width:155}}>
+          {TIME_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <select className="inp" value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{width:175}}>
+          <option value="all">All Categories</option>
+          {CATEGORIES.map(c=><option key={c}>{c}</option>)}
+        </select>
+        <span style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>{filtered.length} item{filtered.length!==1?"s":""}</span>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{textAlign:"center",padding:"44px 0",color:"rgba(255,255,255,.2)",fontSize:12}}>
+          <div style={{fontSize:28,marginBottom:10,opacity:.3}}>✓</div>
+          No items match this filter
+        </div>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:5}}>
+          {filtered.map(it => {
+            const ei      = expiryInfo(it.bestBefore);
+            const zone    = getZone(it.freezer, it.zone);
+            const fz      = FREEZERS[it.freezer];
+            const qty     = Math.max(1, Number(it.qty)||1);
+            const portions= it.totalPortions!=null ? Number(it.totalPortions) : (Number(it.bags||1)*qty);
+            return (
+              <div key={it.id} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 14px",background:"rgba(255,255,255,.04)",border:`1px solid ${ei?ei.color+"28":"rgba(125,211,252,.1)"}`,borderRadius:10,transition:"background .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.07)"}
+                onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,.04)"}>
+
+                {ei && (
+                  <div className={ei.pulse?"pulse":""} style={{flexShrink:0,width:76,textAlign:"center",background:`${ei.color}18`,border:`1px solid ${ei.color}33`,borderRadius:8,padding:"5px 6px"}}>
+                    <div style={{fontSize:11,color:ei.color,fontWeight:600,lineHeight:1.3}}>{ei.label}</div>
+                  </div>
+                )}
+
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,color:"#E0F2FE",fontWeight:500,marginBottom:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.name}</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                    <span style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{fz?.icon} {zone?.label}</span>
+                    <span style={{color:"rgba(255,255,255,.15)",fontSize:10}}>·</span>
+                    <span style={{fontSize:10,background:`${zone?.color||"#7DD3FC"}18`,color:zone?.color||"#7DD3FC",borderRadius:10,padding:"1px 7px"}}>{it.category}</span>
+                  </div>
+                </div>
+
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:18,color:"#7DD3FC",lineHeight:1}}>{portions}</div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,.3)"}}>portion{portions!==1?"s":""}</div>
+                </div>
+
+                {openEdit && (
+                  <button className="btn btn-ghost" style={{padding:"3px 8px",fontSize:10,flexShrink:0}} onClick={()=>openEdit(it)}>edit</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
