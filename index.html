@@ -955,7 +955,7 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
           </div>
           <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap",alignItems:"center"}}>
             <span style={{fontSize:11,color:isGreen?"#6EE7B7":"#64B5D9"}}>
-              {totalPortions} {item.unit||"portion"}{totalPortions!==1?"s":""}
+              {totalPortions} {item.unit||"portions"}
               <span style={{color:"rgba(255,255,255,.35)"}}> · {Math.ceil(totalPortions/qty)} bag{Math.ceil(totalPortions/qty)!==1?"s":""}</span>
             </span>
             <span style={{color:"rgba(255,255,255,.18)",fontSize:10}}>·</span>
