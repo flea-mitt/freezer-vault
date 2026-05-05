@@ -361,9 +361,11 @@ function App() {
     if (!form.name.trim()) return;
     setSyncing(true);
     try {
+      const bags = Number(form.bags)||1, qty = Number(form.qty)||1;
       const payload = {
         name:form.name, freezer:form.freezer, zone:form.zone, category:form.category,
-        bags:Number(form.bags)||1, qty:Number(form.qty), unit:form.unit,
+        bags, qty, unit:form.unit,
+        totalPortions: bags * qty,
         dateFrozen:form.dateFrozen, bestBefore:form.bestBefore||"",
         notify:form.notify||false, minBags:Number(form.minBags)||1,
         group:form.group||"",
@@ -397,18 +399,21 @@ function App() {
     setSyncing(false);
   }
 
-  async function adj(id, delta, currentBags) {
-    const n = Math.max(0, currentBags + delta);
+  async function adj(id, delta, it) {
+    const qty = Math.max(1, Number(it.qty)||1);
+    const currentPortions = it.totalPortions != null ? Number(it.totalPortions) : (Number(it.bags||1) * qty);
+    const newPortions = Math.max(0, currentPortions + delta);
     setSyncing(true);
     try {
       const snap = await db.collection("items").doc(id).get();
       const item = snap.exists ? {id, ...snap.data()} : {id, name:"Unknown"};
-      if (n === 0) {
+      if (newPortions === 0) {
         await db.collection("items").doc(id).delete();
-        await logHistory("removed", item, {note:"Last bag used"});
+        await logHistory("removed", item, {note:"Last portion used"});
       } else {
-        await db.collection("items").doc(id).update({bags:n, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
-        await logHistory(delta > 0 ? "bags_added" : "bags_removed", item, {from:currentBags, to:n});
+        const newBags = Math.ceil(newPortions / qty);
+        await db.collection("items").doc(id).update({totalPortions:newPortions, bags:newBags, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+        await logHistory(delta > 0 ? "portions_added" : "portions_removed", item, {from:currentPortions, to:newPortions});
       }
     } catch(e) {}
     setSyncing(false);
@@ -683,7 +688,7 @@ function App() {
                   {panelItems.length===0
                     ? <div style={{textAlign:"center",padding:"36px 0",color:"rgba(255,255,255,.18)",fontSize:12,fontStyle:"italic"}}>Empty</div>
                     : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                        {panelItems.map(it=><ItemCard key={it.id} item={it} zone={panelZone} kiosk={kiosk} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it.bags||1)}/>)}
+                        {panelItems.map(it=><ItemCard key={it.id} item={it} zone={panelZone} kiosk={kiosk} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)}/>)}
                       </div>}
                 </>
               ) : (
@@ -710,7 +715,7 @@ function App() {
                   {zi.length===0
                     ? <div style={{fontSize:11,color:"rgba(255,255,255,.16)",fontStyle:"italic",paddingLeft:18}}>Empty</div>
                     : <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                        {zi.map(it=><ItemCard key={it.id} item={it} zone={zone} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it.bags||1)}/>)}
+                        {zi.map(it=><ItemCard key={it.id} item={it} zone={zone} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)}/>)}
                       </div>}
                 </div>
               );
@@ -935,6 +940,8 @@ function ZCell({zone,count,active,onClick,exp,kiosk,isGreen}) {
 function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
   const [hover,setHover]=useState(false);
   const ei=expiryInfo(item.bestBefore);
+  const qty=Math.max(1,Number(item.qty)||1);
+  const totalPortions=item.totalPortions!=null?Number(item.totalPortions):(Number(item.bags||1)*qty);
   return (
     <div className={`icard${isGreen?" icard-green":""}`} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
       <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
@@ -948,9 +955,8 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
           </div>
           <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap",alignItems:"center"}}>
             <span style={{fontSize:11,color:isGreen?"#6EE7B7":"#64B5D9"}}>
-              {item.bags||1} bag{(item.bags||1)!==1?"s":""}
-              {item.qty>1 && <span style={{color:"rgba(255,255,255,.35)"}}> × {item.qty} {item.unit}</span>}
-              {item.qty===1 && <span style={{color:"rgba(255,255,255,.35)"}}> · {item.unit}</span>}
+              {totalPortions} {item.unit||"portion"}{totalPortions!==1?"s":""}
+              <span style={{color:"rgba(255,255,255,.35)"}}> · {Math.ceil(totalPortions/qty)} bag{Math.ceil(totalPortions/qty)!==1?"s":""}</span>
             </span>
             <span style={{color:"rgba(255,255,255,.18)",fontSize:10}}>·</span>
             <span style={{fontSize:10,background:`${zone.color}18`,color:zone.color,borderRadius:10,padding:"1px 7px"}}>{item.category}</span>
@@ -1375,8 +1381,10 @@ function HistoryPanel({db, FREEZERS, getZone}) {
     added:        { label:"Added",         color:"#4ADE80", icon:"＋" },
     removed:      { label:"Removed",       color:"#F87171", icon:"−" },
     edited:       { label:"Edited",        color:"#FDE68A", icon:"✎" },
-    bags_added:   { label:"Bags added",    color:"#7DD3FC", icon:"↑" },
-    bags_removed: { label:"Bags removed",  color:"#FB923C", icon:"↓" },
+    bags_added:      { label:"Bags added",       color:"#7DD3FC", icon:"↑" },
+    bags_removed:    { label:"Bags removed",     color:"#FB923C", icon:"↓" },
+    portions_added:  { label:"Portions added",   color:"#7DD3FC", icon:"↑" },
+    portions_removed:{ label:"Portions removed", color:"#FB923C", icon:"↓" },
   };
 
   function fmtTs(ts) {
@@ -1443,8 +1451,10 @@ function HistoryPanel({db, FREEZERS, getZone}) {
               <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
                 <span style={{fontSize:12,color:meta.color,fontWeight:600}}>{meta.label}</span>
                 <span style={{fontSize:13,color:"#E0F2FE",fontWeight:500}}>{entry.itemName}</span>
-                {entry.action==="bags_added"   && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} bags)</span>}
-                {entry.action==="bags_removed" && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} bags)</span>}
+                {entry.action==="bags_added"        && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} bags)</span>}
+                {entry.action==="bags_removed"      && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} bags)</span>}
+                {entry.action==="portions_added"    && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} portions)</span>}
+                {entry.action==="portions_removed"  && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} portions)</span>}
                 {entry.note && <span style={{fontSize:11,color:"rgba(255,255,255,.35)",fontStyle:"italic"}}>{entry.note}</span>}
               </div>
               <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap",alignItems:"center"}}>
