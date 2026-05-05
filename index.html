@@ -434,12 +434,14 @@ function App() {
     if (!usdaKey || !form.name.trim() || !totalGrams) return;
     setConverting(true); setConvertError("");
     try {
-      const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(form.name)}&api_key=${usdaKey}&pageSize=10`);
+      const query = encodeURIComponent(form.name.trim() + " frozen");
+      const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${query}&api_key=${usdaKey}&pageSize=10`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const foods = data.foods || [];
       if (!foods.length) { setConvertError("No USDA match found — try a simpler name"); setConverting(false); return; }
-      const food = foods.find(f=>f.servingSize>0) || foods[0];
+      const frozenMatch = foods.find(f=>f.servingSize>0 && /frozen/i.test(f.description));
+      const food = frozenMatch || foods.find(f=>f.servingSize>0) || foods[0];
       const s = food.servingSize > 0 ? food.servingSize : 100;
       const portions = Math.round(Number(totalGrams) / s);
       if (portions < 1) { setConvertError(`Too few grams for 1 portion (serving: ${s}g)`); setConverting(false); return; }
