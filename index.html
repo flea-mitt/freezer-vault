@@ -470,10 +470,20 @@ function App() {
     return items.filter(i => i.group === item.group).reduce((s,i) => s + (i.bags||1), 0);
   }
 
+  function itemPortions(it) {
+    const qty = Math.max(1, Number(it.qty)||1);
+    return it.totalPortions != null ? Number(it.totalPortions) : (Number(it.bags||1) * qty);
+  }
+
+  function groupPortionsCount(item) {
+    if (!item.group) return itemPortions(item);
+    return items.filter(i => i.group === item.group).reduce((s,i) => s + itemPortions(i), 0);
+  }
+
   const allExpiring   = items.filter(it=>{const d=daysUntil(it.bestBefore);return d!==null&&d<=7;});
 
   // Low stock: deduplicate grouped items so we only alert once per group
-  const lowStockRaw = items.filter(it => it.notify && groupBagCount(it) <= (it.minBags||1));
+  const lowStockRaw = items.filter(it => it.notify && groupPortionsCount(it) <= (it.minBags||1));
   const lowStock = lowStockRaw.filter((it,i,arr) => {
     if (!it.group) return true;
     return arr.findIndex(x => x.group === it.group) === i; // keep first of each group
@@ -683,7 +693,7 @@ function App() {
         )}
 
         {activeFreezer==="stockwatch" && (
-          <StockWatchPanel items={items} FREEZERS={FREEZERS} getZone={getZone} groupBagCount={groupBagCount} openEdit={isOwner?openEdit:null}/>
+          <StockWatchPanel items={items} FREEZERS={FREEZERS} getZone={getZone} groupBagCount={groupBagCount} groupPortionsCount={groupPortionsCount} openEdit={isOwner?openEdit:null}/>
         )}
 
         {activeFreezer==="history" && (
@@ -926,7 +936,7 @@ function App() {
                         <input className="inp" type="number" min="1" value={form.minBags}
                           onChange={e=>setForm(f=>({...f,minBags:Number(e.target.value)}))}
                           style={{width:80}}/>
-                        <span style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>bag{form.minBags!==1?"s":""} total</span>
+                        <span style={{fontSize:12,color:"rgba(255,255,255,.4)"}}>portion{form.minBags!==1?"s":""} total</span>
                       </div>
                     </Field>
                   </div>
@@ -1012,8 +1022,8 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
           <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
             <span style={{fontSize:kiosk?15:13,fontWeight:500,color:"#E0F2FE"}}>{item.name}</span>
             {ei && <span className={ei.pulse?"pulse":""} style={{fontSize:10,color:ei.color,background:`${ei.color}18`,border:`1px solid ${ei.color}33`,borderRadius:10,padding:"1px 7px",flexShrink:0}}>{ei.label}</span>}
-            {item.notify && (item.bags||1)<=(item.minBags||1) && <span style={{fontSize:10,color:"#F87171",background:"rgba(248,113,113,.15)",border:"1px solid rgba(248,113,113,.3)",borderRadius:10,padding:"1px 7px",flexShrink:0}}>🔔 low</span>}
-            {item.notify && (item.bags||1)>(item.minBags||1) && <span style={{fontSize:10,color:"rgba(255,255,255,.25)",flexShrink:0}}>🔔</span>}
+            {item.notify && totalPortions<=(item.minBags||1) && <span style={{fontSize:10,color:"#F87171",background:"rgba(248,113,113,.15)",border:"1px solid rgba(248,113,113,.3)",borderRadius:10,padding:"1px 7px",flexShrink:0}}>🔔 low</span>}
+            {item.notify && totalPortions>(item.minBags||1) && <span style={{fontSize:10,color:"rgba(255,255,255,.25)",flexShrink:0}}>🔔</span>}
             {item.group && <span style={{fontSize:10,color:"rgba(255,255,255,.25)",background:"rgba(255,255,255,.06)",borderRadius:10,padding:"1px 7px",flexShrink:0}}>⛓ {item.group}</span>}
           </div>
           <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap",alignItems:"center"}}>
@@ -1576,11 +1586,14 @@ function HistoryPanel({db, FREEZERS, getZone}) {
   );
 }
 
-function StockWatchPanel({items, FREEZERS, getZone, groupBagCount, openEdit}) {
-  // All items with notify on
+function StockWatchPanel({items, FREEZERS, getZone, groupBagCount, groupPortionsCount, openEdit}) {
   const watchedItems = items.filter(it => it.notify);
 
-  // Build deduplicated list — grouped items appear once, ungrouped appear individually
+  function itemPortions(it) {
+    const qty = Math.max(1, Number(it.qty)||1);
+    return it.totalPortions != null ? Number(it.totalPortions) : (Number(it.bags||1) * qty);
+  }
+
   const seen = new Set();
   const watchList = [];
   for (const item of watchedItems) {
@@ -1588,13 +1601,12 @@ function StockWatchPanel({items, FREEZERS, getZone, groupBagCount, openEdit}) {
     if (seen.has(key)) continue;
     seen.add(key);
     if (item.group) {
-      // Collect all items in this group
-      const groupItems = watchedItems.filter(i => i.group === item.group);
-      const totalBags  = groupItems.reduce((s,i) => s + (i.bags||1), 0);
-      const minBags    = Math.max(...groupItems.map(i => i.minBags||1));
-      watchList.push({ type:"group", key, name:item.group, totalBags, minBags, items:groupItems });
+      const groupItems   = watchedItems.filter(i => i.group === item.group);
+      const totalPortions = groupItems.reduce((s,i) => s + itemPortions(i), 0);
+      const minPortions   = Math.max(...groupItems.map(i => i.minBags||1));
+      watchList.push({ type:"group", key, name:item.group, totalPortions, minPortions, items:groupItems });
     } else {
-      watchList.push({ type:"single", key, name:item.name, totalBags:item.bags||1, minBags:item.minBags||1, items:[item] });
+      watchList.push({ type:"single", key, name:item.name, totalPortions:itemPortions(item), minPortions:item.minBags||1, items:[item] });
     }
   }
 
@@ -1610,14 +1622,14 @@ function StockWatchPanel({items, FREEZERS, getZone, groupBagCount, openEdit}) {
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div className="lbl" style={{color:"rgba(125,211,252,.4)",fontSize:9}}>
-          {watchList.length} watched · {watchList.filter(w=>w.totalBags<=w.minBags).length} currently low
+          {watchList.length} watched · {watchList.filter(w=>w.totalPortions<=w.minPortions).length} currently low
         </div>
       </div>
 
       {watchList.map(entry => {
-        const isLow   = entry.totalBags <= entry.minBags;
-        const pct     = Math.min(100, (entry.totalBags / Math.max(1, entry.minBags * 2)) * 100);
-        const barColor= isLow ? "#F87171" : entry.totalBags <= entry.minBags * 1.5 ? "#FB923C" : "#4ADE80";
+        const isLow   = entry.totalPortions <= entry.minPortions;
+        const pct     = Math.min(100, (entry.totalPortions / Math.max(1, entry.minPortions * 2)) * 100);
+        const barColor= isLow ? "#F87171" : entry.totalPortions <= entry.minPortions * 1.5 ? "#FB923C" : "#4ADE80";
 
         return (
           <div key={entry.key} style={{background:"rgba(255,255,255,.04)",border:`1px solid ${isLow?"rgba(248,113,113,.3)":"rgba(125,211,252,.1)"}`,borderRadius:12,padding:"14px 16px"}}>
@@ -1630,8 +1642,8 @@ function StockWatchPanel({items, FREEZERS, getZone, groupBagCount, openEdit}) {
                 {isLow && <span className="pulse" style={{fontSize:10,color:"#F87171",background:"rgba(248,113,113,.15)",border:"1px solid rgba(248,113,113,.3)",borderRadius:10,padding:"1px 8px"}}>🔔 LOW</span>}
               </div>
               <div style={{textAlign:"right"}}>
-                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:22,color:barColor,lineHeight:1}}>{entry.totalBags}</div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,.3)"}}>of {entry.minBags} min</div>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:22,color:barColor,lineHeight:1}}>{entry.totalPortions}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,.3)"}}>of {entry.minPortions} portions min</div>
               </div>
             </div>
 
@@ -1649,7 +1661,7 @@ function StockWatchPanel({items, FREEZERS, getZone, groupBagCount, openEdit}) {
                   <div key={it.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",background:"rgba(0,0,0,.15)",borderRadius:7}}>
                     <span style={{fontSize:11,color:"rgba(255,255,255,.5)",flexShrink:0}}>{fz?.icon} {zone?.label}</span>
                     <span style={{flex:1,fontSize:11,color:"rgba(255,255,255,.7)"}}>{it.name}</span>
-                    <span style={{fontSize:11,color:"#7DD3FC",fontWeight:500}}>{it.bags||1} bag{(it.bags||1)!==1?"s":""}</span>
+                    <span style={{fontSize:11,color:"#7DD3FC",fontWeight:500}}>{itemPortions(it)} portion{itemPortions(it)!==1?"s":""}</span>
                     {it.addedBy && <span style={{fontSize:10,color:"rgba(255,255,255,.25)"}}>👤 {it.addedBy}</span>}
                     {openEdit && (
                       <button className="btn btn-ghost" style={{padding:"2px 8px",fontSize:10}} onClick={()=>openEdit(it)}>edit</button>
