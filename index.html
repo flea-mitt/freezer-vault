@@ -261,6 +261,9 @@ function App() {
   const [clock,         setClock]        = useState(new Date());
   const [storedCategories, setStoredCategories] = useState(null);
   const [usdaKey,          setUsdaKey]          = useState("");
+  const [totalGrams,       setTotalGrams]       = useState("");
+  const [converting,       setConverting]       = useState(false);
+  const [convertError,     setConvertError]     = useState("");
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 30000);
@@ -427,6 +430,31 @@ function App() {
     setSyncing(false);
   }
 
+  async function convertToPortions() {
+    if (!usdaKey || !form.name.trim() || !totalGrams) return;
+    setConverting(true); setConvertError("");
+    try {
+      const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(form.name)}&api_key=${usdaKey}&pageSize=10&dataType=SR%20Legacy,Foundation`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const food = (data.foods||[]).find(f=>f.servingSize&&f.servingSize>0);
+      if (!food) { setConvertError("No USDA match found — try a simpler name"); setConverting(false); return; }
+      const portions = Math.round(Number(totalGrams) / food.servingSize);
+      if (portions < 1) { setConvertError(`Too few grams for 1 portion (serving size: ${food.servingSize}g)`); setConverting(false); return; }
+      const get = id => (food.foodNutrients||[]).find(n=>n.nutrientId===id)?.value || 0;
+      const s = food.servingSize;
+      setForm(f=>({...f,
+        qty: portions, unit:"portions",
+        calories: String(Math.round(get(1008)*s/100)) || "",
+        protein:  String(Math.round(get(1003)*s/100*10)/10) || "",
+        carbs:    String(Math.round(get(1005)*s/100*10)/10) || "",
+        fat:      String(Math.round(get(1004)*s/100*10)/10) || "",
+      }));
+      setConvertError(`✓ ${food.description} · ${food.servingSize}g/portion`);
+    } catch(e) { setConvertError("Lookup failed: "+e.message); }
+    setConverting(false);
+  }
+
   function matches(it) {
     const q = search.toLowerCase();
     return (it.name.toLowerCase().includes(q)||(it.notes||"").toLowerCase().includes(q))
@@ -454,14 +482,14 @@ function App() {
   const panelZone  = activeZone ? getZone(activeFreezer, activeZone) : null;
   const panelItems = activeZone ? zoneItems(activeFreezer, activeZone) : [];
 
-  function openAdd(zid) { setForm({...INIT,freezer:activeFreezer,zone:zid||(fz.zones[0].id)}); setEditId(null); setShowForm(true); }
+  function openAdd(zid) { setForm({...INIT,freezer:activeFreezer,zone:zid||(fz.zones[0].id)}); setEditId(null); setShowForm(true); setTotalGrams(""); setConvertError(""); }
   function openEdit(item) {
     setForm({name:item.name,freezer:item.freezer,zone:item.zone,category:item.category||"Other",
       bags:item.bags||1,qty:item.qty,unit:item.unit,dateFrozen:item.dateFrozen||todayStr(),bestBefore:item.bestBefore||"",
       notify:item.notify||false,minBags:item.minBags||1,group:item.group||"",
       calories:item.calories||"",protein:item.protein||"",carbs:item.carbs||"",fat:item.fat||"",
       recipeUrl:item.recipeUrl||"",notes:item.notes||""});
-    setEditId(item.id); setShowForm(true);
+    setEditId(item.id); setShowForm(true); setTotalGrams(""); setConvertError("");
   }
 
   const statusColor = online ? "#4ADE80" : "#FB923C";
@@ -760,8 +788,6 @@ function App() {
                 {form.name && scanStatus==="" && !showScanner && <div style={{fontSize:11,color:"#4ADE80",marginTop:6}}>✓ {form.name}</div>}
               </Field>
 
-              <UsdaLookup usdaKey={usdaKey} initialQuery={form.name} onApply={vals=>setForm(f=>({...f,...vals}))} />
-
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <Field label="FREEZER">
                   <select className="inp" value={form.freezer} onChange={e=>{const nf=e.target.value;setForm(f=>({...f,freezer:nf,zone:FREEZERS[nf].zones[0].id}));}}>
@@ -797,6 +823,24 @@ function App() {
               {(form.bags>1||form.qty>1) && (
                 <div style={{fontSize:11,color:"rgba(125,211,252,.5)",marginTop:-4}}>
                   = {form.bags} bag{form.bags!==1?"s":""} × {form.qty} {form.unit} = {form.bags*form.qty} {form.unit} total
+                </div>
+              )}
+
+              {usdaKey && (
+                <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+                  <Field label="TOTAL GRAMS">
+                    <input className="inp" type="number" placeholder="e.g. 600" value={totalGrams}
+                      onChange={e=>{setTotalGrams(e.target.value);setConvertError("");}}/>
+                  </Field>
+                  <button type="button" className="btn btn-ghost" style={{marginBottom:1,fontSize:11,whiteSpace:"nowrap"}}
+                    onClick={convertToPortions} disabled={converting||!form.name.trim()||!totalGrams}>
+                    {converting?<span className="spin">↻</span>:"Convert to portions"}
+                  </button>
+                </div>
+              )}
+              {convertError && (
+                <div style={{fontSize:11,color:convertError.startsWith("✓")?"#4ADE80":"#F87171",marginTop:-4}}>
+                  {convertError}
                 </div>
               )}
 
@@ -1265,116 +1309,6 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function UsdaLookup({usdaKey, initialQuery, onApply}) {
-  const [open,      setOpen]      = useState(false);
-  const [query,     setQuery]     = useState("");
-  const [searching, setSearching] = useState(false);
-  const [results,   setResults]   = useState([]);
-  const [food,      setFood]      = useState(null);
-  const [grams,     setGrams]     = useState("");
-  const [error,     setError]     = useState("");
-
-  useEffect(() => { if (open && !query) setQuery(initialQuery||""); }, [open]);
-
-  function nutrient(food, id) {
-    return (food.foodNutrients||[]).find(n=>n.nutrientId===id)?.value || 0;
-  }
-
-  async function search() {
-    if (!query.trim()) return;
-    setSearching(true); setResults([]); setFood(null); setError("");
-    try {
-      const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&api_key=${usdaKey}&pageSize=10&dataType=SR%20Legacy,Foundation`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setResults((data.foods||[]).filter(f=>f.servingSize&&f.servingSize>0));
-    } catch(e) { setError("Search failed: "+e.message); }
-    setSearching(false);
-  }
-
-  function selectFood(f) { setFood(f); setGrams(""); }
-
-  function apply() {
-    const portionCount = Math.round(Number(grams) / food.servingSize);
-    if (portionCount < 1) return;
-    const s = food.servingSize;
-    const cal  = Math.round(nutrient(food,1008) * s / 100);
-    const prot = Math.round(nutrient(food,1003) * s / 100 * 10) / 10;
-    const carb = Math.round(nutrient(food,1005) * s / 100 * 10) / 10;
-    const fat  = Math.round(nutrient(food,1004) * s / 100 * 10) / 10;
-    onApply({qty: portionCount, unit:"portions", calories:cal||"", protein:prot||"", carbs:carb||"", fat:fat||""});
-    setOpen(false); setFood(null); setGrams(""); setResults([]);
-  }
-
-  const portions = food && grams ? Math.round(Number(grams)/food.servingSize) : 0;
-
-  return (
-    <div>
-      <button type="button" className="btn btn-ghost" style={{width:"100%",fontSize:11,padding:"7px"}}
-        onClick={()=>setOpen(p=>!p)}>
-        {open?"✕ Close lookup":"🔬 Look up nutrition & portions (USDA)"}
-      </button>
-      {open && (
-        <div style={{marginTop:6,background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.12)",borderRadius:9,padding:"12px",display:"flex",flexDirection:"column",gap:8}}>
-          {!usdaKey && <div style={{fontSize:12,color:"#FB923C"}}>⚠ Add your USDA API key in the Admin panel to enable this.</div>}
-          <div style={{display:"flex",gap:6}}>
-            <input className="inp" placeholder="Search food…" value={query}
-              onChange={e=>setQuery(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&search()}
-              style={{flex:1,fontSize:12}}/>
-            <button className="btn btn-primary" onClick={search} disabled={searching||!query.trim()||!usdaKey} style={{fontSize:11,whiteSpace:"nowrap"}}>
-              {searching?<span className="spin">↻</span>:"Search"}
-            </button>
-          </div>
-
-          {error && <div style={{fontSize:11,color:"#F87171"}}>{error}</div>}
-
-          {results.length>0 && !food && (
-            <div style={{display:"flex",flexDirection:"column",gap:3,maxHeight:160,overflowY:"auto"}}>
-              {results.map(f=>(
-                <button key={f.fdcId} type="button" className="btn btn-ghost"
-                  style={{textAlign:"left",fontSize:11,padding:"6px 9px",justifyContent:"space-between",display:"flex"}}
-                  onClick={()=>selectFood(f)}>
-                  <span>{f.description}</span>
-                  <span style={{color:"rgba(255,255,255,.35)",flexShrink:0,marginLeft:8}}>{f.servingSize}g/serving</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {food && (
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <span style={{fontSize:12,color:"#BAE6FD"}}>{food.description}</span>
-                <button type="button" onClick={()=>{setFood(null);setGrams("");}}
-                  style={{background:"none",border:"none",color:"rgba(255,255,255,.35)",cursor:"pointer",fontSize:13,padding:0}}>✕</button>
-              </div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",fontSize:11,color:"rgba(255,255,255,.4)"}}>
-                {[["serving",`${food.servingSize}g`],["kcal",Math.round(nutrient(food,1008)*food.servingSize/100)],["protein",`${Math.round(nutrient(food,1003)*food.servingSize/100*10)/10}g`],["carbs",`${Math.round(nutrient(food,1005)*food.servingSize/100*10)/10}g`],["fat",`${Math.round(nutrient(food,1004)*food.servingSize/100*10)/10}g`]].map(([l,v])=>(
-                  <div key={l} style={{background:"rgba(255,255,255,.05)",borderRadius:6,padding:"2px 7px"}}><span style={{color:"rgba(255,255,255,.25)"}}>{l} </span><span style={{color:"#E0F2FE"}}>{v}</span></div>
-                ))}
-              </div>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <input className="inp" type="number" placeholder="Total grams, e.g. 600" value={grams}
-                  onChange={e=>setGrams(e.target.value)}
-                  style={{flex:1,fontSize:12}}/>
-                <span style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>g total</span>
-              </div>
-              {portions>0 && (
-                <div style={{fontSize:12,color:"#4ADE80"}}>= {portions} portion{portions!==1?"s":""} of {food.servingSize}g each</div>
-              )}
-              <button type="button" className="btn btn-primary" onClick={apply}
-                disabled={portions<1} style={{fontSize:11}}>
-                Apply — {portions} portion{portions!==1?"s":""}, {Math.round(nutrient(food,1008)*food.servingSize/100)} kcal each
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
