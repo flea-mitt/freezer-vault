@@ -189,7 +189,7 @@ function fmtTime(ts) {
 
 const INIT = {
   name:"", freezer:"chest", zone:"basket", category:"Cooked Meals",
-  bags:1, qty:1, unit:"portions", dateFrozen:todayStr(), bestBefore:"",
+  bags:1, qty:1, unit:"portions", storage:"box", dateFrozen:todayStr(), bestBefore:"",
   notify:false, minBags:1, group:"",
   calories:"", protein:"", carbs:"", fat:"",
   recipeUrl:"", notes:""
@@ -364,7 +364,7 @@ function App() {
       const bags = Number(form.bags)||1, qty = Number(form.qty)||1;
       const payload = {
         name:form.name, freezer:form.freezer, zone:form.zone, category:form.category,
-        bags, qty, unit:form.unit,
+        bags, qty, unit:form.unit, storage:form.storage||"box",
         totalPortions: bags * qty,
         dateFrozen:form.dateFrozen, bestBefore:form.bestBefore||"",
         notify:form.notify||false, minBags:Number(form.minBags)||1,
@@ -765,11 +765,19 @@ function App() {
                 </Field>
               </div>
 
-              <Field label="CATEGORY">
-                <select className="inp" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
-                  {allCategories.map(c=><option key={c}>{c}</option>)}
-                </select>
-              </Field>
+              <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:10}}>
+                <Field label="CATEGORY">
+                  <select className="inp" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
+                    {allCategories.map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </Field>
+                <Field label="STORAGE">
+                  <select className="inp" value={form.storage||"box"} onChange={e=>setForm(f=>({...f,storage:e.target.value}))}>
+                    <option value="box">Box</option>
+                    <option value="free">Free</option>
+                  </select>
+                </Field>
+              </div>
 
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
                 <Field label="BAGS"><input className="inp" type="number" min="1" value={form.bags} onChange={e=>setForm(f=>({...f,bags:Number(e.target.value)}))}/></Field>
@@ -960,6 +968,7 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
             </span>
             <span style={{color:"rgba(255,255,255,.18)",fontSize:10}}>·</span>
             <span style={{fontSize:10,background:`${zone.color}18`,color:zone.color,borderRadius:10,padding:"1px 7px"}}>{item.category}</span>
+            {item.storage && <><span style={{color:"rgba(255,255,255,.18)",fontSize:10}}>·</span><span style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{item.storage}</span></>}
             {item.dateFrozen && <><span style={{color:"rgba(255,255,255,.18)",fontSize:10}}>·</span><span style={{fontSize:10,color:"rgba(255,255,255,.28)"}}>{frozenLabel(item.dateFrozen)}</span></>}
           </div>
           {item.notes && <div style={{fontSize:11,color:"rgba(255,255,255,.26)",marginTop:4,fontStyle:"italic"}}>{item.notes}</div>}
