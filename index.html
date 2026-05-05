@@ -760,7 +760,7 @@ function App() {
                 {form.name && scanStatus==="" && !showScanner && <div style={{fontSize:11,color:"#4ADE80",marginTop:6}}>✓ {form.name}</div>}
               </Field>
 
-              {usdaKey && <UsdaLookup usdaKey={usdaKey} initialQuery={form.name} onApply={vals=>setForm(f=>({...f,...vals}))}/>}
+              <UsdaLookup usdaKey={usdaKey} initialQuery={form.name} onApply={vals=>setForm(f=>({...f,...vals}))} />
 
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 <Field label="FREEZER">
@@ -1320,12 +1320,13 @@ function UsdaLookup({usdaKey, initialQuery, onApply}) {
       </button>
       {open && (
         <div style={{marginTop:6,background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.12)",borderRadius:9,padding:"12px",display:"flex",flexDirection:"column",gap:8}}>
+          {!usdaKey && <div style={{fontSize:12,color:"#FB923C"}}>⚠ Add your USDA API key in the Admin panel to enable this.</div>}
           <div style={{display:"flex",gap:6}}>
             <input className="inp" placeholder="Search food…" value={query}
               onChange={e=>setQuery(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&search()}
               style={{flex:1,fontSize:12}}/>
-            <button className="btn btn-primary" onClick={search} disabled={searching||!query.trim()} style={{fontSize:11,whiteSpace:"nowrap"}}>
+            <button className="btn btn-primary" onClick={search} disabled={searching||!query.trim()||!usdaKey} style={{fontSize:11,whiteSpace:"nowrap"}}>
               {searching?<span className="spin">↻</span>:"Search"}
             </button>
           </div>
