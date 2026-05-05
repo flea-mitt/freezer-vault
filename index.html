@@ -434,15 +434,16 @@ function App() {
     if (!usdaKey || !form.name.trim() || !totalGrams) return;
     setConverting(true); setConvertError("");
     try {
-      const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(form.name)}&api_key=${usdaKey}&pageSize=10&dataType=SR%20Legacy,Foundation`);
+      const res = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(form.name)}&api_key=${usdaKey}&pageSize=10`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const food = (data.foods||[]).find(f=>f.servingSize&&f.servingSize>0);
-      if (!food) { setConvertError("No USDA match found — try a simpler name"); setConverting(false); return; }
-      const portions = Math.round(Number(totalGrams) / food.servingSize);
-      if (portions < 1) { setConvertError(`Too few grams for 1 portion (serving size: ${food.servingSize}g)`); setConverting(false); return; }
+      const foods = data.foods || [];
+      if (!foods.length) { setConvertError("No USDA match found — try a simpler name"); setConverting(false); return; }
+      const food = foods.find(f=>f.servingSize>0) || foods[0];
+      const s = food.servingSize > 0 ? food.servingSize : 100;
+      const portions = Math.round(Number(totalGrams) / s);
+      if (portions < 1) { setConvertError(`Too few grams for 1 portion (serving: ${s}g)`); setConverting(false); return; }
       const get = id => (food.foodNutrients||[]).find(n=>n.nutrientId===id)?.value || 0;
-      const s = food.servingSize;
       setForm(f=>({...f,
         qty: portions, unit:"portions",
         calories: String(Math.round(get(1008)*s/100)) || "",
@@ -450,7 +451,7 @@ function App() {
         carbs:    String(Math.round(get(1005)*s/100*10)/10) || "",
         fat:      String(Math.round(get(1004)*s/100*10)/10) || "",
       }));
-      setConvertError(`✓ ${food.description} · ${food.servingSize}g/portion`);
+      setConvertError(`✓ ${food.description} · ${s}g/portion`);
     } catch(e) { setConvertError("Lookup failed: "+e.message); }
     setConverting(false);
   }
@@ -815,17 +816,6 @@ function App() {
                 </Field>
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                <Field label="BAGS"><input className="inp" type="number" min="1" value={form.bags} onChange={e=>setForm(f=>({...f,bags:Number(e.target.value)}))}/></Field>
-                <Field label="PORTIONS / BAG"><input className="inp" type="number" min="1" value={form.qty} onChange={e=>setForm(f=>({...f,qty:Number(e.target.value)}))}/></Field>
-                <Field label="UNIT"><input className="inp" placeholder="portions / g" value={form.unit} onChange={e=>setForm(f=>({...f,unit:e.target.value}))}/></Field>
-              </div>
-              {(form.bags>1||form.qty>1) && (
-                <div style={{fontSize:11,color:"rgba(125,211,252,.5)",marginTop:-4}}>
-                  = {form.bags} bag{form.bags!==1?"s":""} × {form.qty} {form.unit} = {form.bags*form.qty} {form.unit} total
-                </div>
-              )}
-
               {usdaKey && (
                 <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
                   <Field label="TOTAL GRAMS">
@@ -841,6 +831,17 @@ function App() {
               {convertError && (
                 <div style={{fontSize:11,color:convertError.startsWith("✓")?"#4ADE80":"#F87171",marginTop:-4}}>
                   {convertError}
+                </div>
+              )}
+
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                <Field label="BAGS"><input className="inp" type="number" min="1" value={form.bags} onChange={e=>setForm(f=>({...f,bags:Number(e.target.value)}))}/></Field>
+                <Field label="PORTIONS / BAG"><input className="inp" type="number" min="1" value={form.qty} onChange={e=>setForm(f=>({...f,qty:Number(e.target.value)}))}/></Field>
+                <Field label="UNIT"><input className="inp" placeholder="portions / g" value={form.unit} onChange={e=>setForm(f=>({...f,unit:e.target.value}))}/></Field>
+              </div>
+              {(form.bags>1||form.qty>1) && (
+                <div style={{fontSize:11,color:"rgba(125,211,252,.5)",marginTop:-4}}>
+                  = {form.bags} bag{form.bags!==1?"s":""} × {form.qty} {form.unit} = {form.bags*form.qty} {form.unit} total
                 </div>
               )}
 
