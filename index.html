@@ -430,6 +430,27 @@ function App() {
     setSyncing(false);
   }
 
+  async function moveItem(id, item, portionsToMove, destFreezer, destZone) {
+    setSyncing(true);
+    try {
+      const qty = Math.max(1, Number(item.qty)||1);
+      const currentPortions = item.totalPortions != null ? Number(item.totalPortions) : (Number(item.bags||1) * qty);
+      const moveCount = Math.min(portionsToMove, currentPortions);
+      const remainingPortions = currentPortions - moveCount;
+      const now = firebase.firestore.FieldValue.serverTimestamp();
+      if (remainingPortions === 0) {
+        await db.collection("items").doc(id).update({freezer:destFreezer, zone:destZone, updatedAt:now});
+        await logHistory("moved", item, {from:`${item.freezer}/${item.zone}`, to:`${destFreezer}/${destZone}`, portions:moveCount});
+      } else {
+        await db.collection("items").doc(id).update({totalPortions:remainingPortions, bags:Math.ceil(remainingPortions/qty), updatedAt:now});
+        const {id:_id, ...rest} = item;
+        const ref = await db.collection("items").add({...rest, freezer:destFreezer, zone:destZone, totalPortions:moveCount, bags:Math.ceil(moveCount/qty), createdAt:now, updatedAt:now});
+        await logHistory("moved", item, {from:`${item.freezer}/${item.zone}`, to:`${destFreezer}/${destZone}`, portions:moveCount, newId:ref.id});
+      }
+    } catch(e) { alert("Move failed: " + e.message); }
+    setSyncing(false);
+  }
+
   async function convertToPortions() {
     if (!usdaKey || !form.name.trim() || !totalGrams) return;
     setConverting(true); setConvertError("");
@@ -742,7 +763,7 @@ function App() {
                   {panelItems.length===0
                     ? <div style={{textAlign:"center",padding:"36px 0",color:"rgba(255,255,255,.18)",fontSize:12,fontStyle:"italic"}}>Empty</div>
                     : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                        {panelItems.map(it=><ItemCard key={it.id} item={it} zone={panelZone} kiosk={kiosk} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)}/>)}
+                        {panelItems.map(it=><ItemCard key={it.id} item={it} zone={panelZone} kiosk={kiosk} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)} onMove={(p,f,z)=>moveItem(it.id,it,p,f,z)}/>)}
                       </div>}
                 </>
               ) : (
@@ -769,7 +790,7 @@ function App() {
                   {zi.length===0
                     ? <div style={{fontSize:11,color:"rgba(255,255,255,.16)",fontStyle:"italic",paddingLeft:18}}>Empty</div>
                     : <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                        {zi.map(it=><ItemCard key={it.id} item={it} zone={zone} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)}/>)}
+                        {zi.map(it=><ItemCard key={it.id} item={it} zone={zone} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)} onMove={(p,f,z)=>moveItem(it.id,it,p,f,z)}/>)}
                       </div>}
                 </div>
               );
@@ -1017,11 +1038,16 @@ function ZCell({zone,count,active,onClick,exp,kiosk,isGreen}) {
   );
 }
 
-function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
+function ItemCard({item,zone,onEdit,onDel,onAdj,onMove,kiosk,isGreen,isOwner}) {
   const [hover,setHover]=useState(false);
   const ei=expiryInfo(item.bestBefore);
   const qty=Math.max(1,Number(item.qty)||1);
   const totalPortions=item.totalPortions!=null?Number(item.totalPortions):(Number(item.bags||1)*qty);
+  const otherFreezer = item.freezer==="chest" ? "indoor" : "chest";
+  const [showMove,setShowMove]=useState(false);
+  const [movePortions,setMovePortions]=useState(totalPortions);
+  const [moveFreezer,setMoveFreezer]=useState(otherFreezer);
+  const [moveZone,setMoveZone]=useState(FREEZERS[otherFreezer].zones[0].id);
   return (
     <div className={`icard${isGreen?" icard-green":""}`} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
       <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
@@ -1079,6 +1105,7 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
             </div>
             {hover && (
               <div style={{display:"flex",gap:4}}>
+                <button className="btn btn-ghost" style={{padding:"3px 8px",fontSize:10}} onClick={()=>{setMovePortions(totalPortions);setShowMove(s=>!s);}}>↗ move</button>
                 <button className="btn btn-ghost" style={{padding:"3px 8px",fontSize:10}} onClick={onEdit}>edit</button>
                 <button className="btn btn-danger" style={{padding:"3px 8px",fontSize:10}} onClick={onDel}>×</button>
               </div>
@@ -1086,6 +1113,31 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,kiosk,isGreen,isOwner}) {
           </div>
         )}
       </div>
+      {isOwner && showMove && (
+        <div style={{marginTop:8,padding:"8px 10px",background:"rgba(255,255,255,.05)",borderRadius:8,borderTop:"1px solid rgba(255,255,255,.08)"}}>
+          <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginBottom:6}}>Move portions to another freezer</div>
+          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+            <input type="number" className="inp" min={1} max={totalPortions} value={movePortions}
+              onChange={e=>setMovePortions(Math.min(totalPortions,Math.max(1,Number(e.target.value)||1)))}
+              style={{width:55,padding:"4px 8px",fontSize:12}}/>
+            <span style={{fontSize:11,color:"rgba(255,255,255,.25)"}}>→</span>
+            <select className="inp" value={moveFreezer}
+              onChange={e=>{const nf=e.target.value;setMoveFreezer(nf);setMoveZone(FREEZERS[nf].zones[0].id);}}
+              style={{padding:"4px 8px",fontSize:12}}>
+              {Object.values(FREEZERS).filter(f=>f.id!==item.freezer).map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
+            </select>
+            <select className="inp" value={moveZone} onChange={e=>setMoveZone(e.target.value)}
+              style={{padding:"4px 8px",fontSize:12}}>
+              {FREEZERS[moveFreezer].zones.map(z=><option key={z.id} value={z.id}>{z.label}</option>)}
+            </select>
+            <button className="btn" style={{padding:"4px 10px",fontSize:11}}
+              onClick={()=>{onMove(movePortions,moveFreezer,moveZone);setShowMove(false);}}>
+              Move
+            </button>
+            <button className="btn btn-ghost" style={{padding:"4px 8px",fontSize:11}} onClick={()=>setShowMove(false)}>✕</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
