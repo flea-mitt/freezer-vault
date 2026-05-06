@@ -187,11 +187,12 @@ function daysUntil(d) {
 function expiryInfo(bb) {
   const d = daysUntil(bb);
   if (d === null) return null;
-  if (d < 0)   return {label:`Expired ${Math.abs(d)}d ago`,color:"#F87171",pulse:true};
-  if (d === 0) return {label:"Expires today",              color:"#F87171",pulse:true};
-  if (d <= 7)  return {label:`${d}d left`,                 color:"#FB923C",pulse:true};
-  if (d <= 30) return {label:`${d}d left`,                 color:"#FDE68A",pulse:false};
-  return             {label:`${d}d left`,                  color:"#4ADE80",pulse:false};
+  if (d < -14) return {label:"Dispose",                        color:"#F87171",pulse:true};
+  if (d < 0)   return {label:`Expired ${Math.abs(d)}d ago`,    color:"#F87171",pulse:true};
+  if (d === 0) return {label:"Expires today",                  color:"#F87171",pulse:true};
+  if (d <= 14) return {label:"Use this week",                  color:"#FB923C",pulse:true};
+  if (d <= 30) return {label:`${d}d left`,                     color:"#FDE68A",pulse:false};
+  return             {label:`${d}d left`,                      color:"#4ADE80",pulse:false};
 }
 function frozenLabel(d) {
   if (!d) return "";
@@ -573,7 +574,7 @@ function App() {
       && (filterCat==="all"||it.category===filterCat);
   }
   const zoneItems = (fid,zid) => items.filter(it=>it.freezer===fid&&it.zone===zid&&matches(it));
-  const zoneExp   = (fid,zid) => items.filter(i=>i.freezer===fid&&i.zone===zid&&daysUntil(i.bestBefore)!==null&&daysUntil(i.bestBefore)<=7).length;
+  const zoneExp   = (fid,zid) => items.filter(i=>i.freezer===fid&&i.zone===zid&&daysUntil(i.bestBefore)!==null&&daysUntil(i.bestBefore)>=0&&daysUntil(i.bestBefore)<=14).length;
 
   // Group stock counts — items with same group tag are summed across freezers
   function groupBagCount(item) {
@@ -591,7 +592,7 @@ function App() {
     return items.filter(i => i.group === item.group).reduce((s,i) => s + itemPortions(i), 0);
   }
 
-  const allExpiring   = items.filter(it=>{const d=daysUntil(it.bestBefore);return d!==null&&d<=7;});
+  const allExpiring   = items.filter(it=>{const d=daysUntil(it.bestBefore);return d!==null&&d>=0&&d<=14;});
 
   // Low stock: deduplicate grouped items so we only alert once per group
   const lowStockRaw = items.filter(it => it.notify && groupPortionsCount(it) <= (it.minBags||1));
@@ -1244,7 +1245,7 @@ function OverviewPanel({items,allExpiring,totalPortions,lowStock,expiryInfo,getZ
   const totalBags=items.reduce((s,i)=>s+Number(i.bags||1),0);
   const freezerStats=Object.values(FREEZERS).map(fz=>{
     const fzItems=items.filter(i=>i.freezer===fz.id);
-    return {fz,count:fzItems.length,bags:fzItems.reduce((s,i)=>s+Number(i.bags||1),0),expiring:fzItems.filter(i=>{const d=daysUntil(i.bestBefore);return d!==null&&d<=7;}).length};
+    return {fz,count:fzItems.length,bags:fzItems.reduce((s,i)=>s+Number(i.bags||1),0),expiring:fzItems.filter(i=>{const d=daysUntil(i.bestBefore);return d!==null&&d>=0&&d<=14;}).length};
   });
   const catCounts = CATEGORIES.map(cat => {
     const catItems = items.filter(i => i.category === cat);
