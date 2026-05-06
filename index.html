@@ -496,11 +496,14 @@ function App() {
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({token: todoistKey, name: item.name, projectId: todoistProjectId||""})
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.text().catch(()=>"");
+        throw new Error(`HTTP ${res.status}: ${errBody}`);
+      }
       const task = await res.json();
       await db.collection("items").doc(item.id).update({todoistAdded:true, todoistTaskId:task.id, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
     } catch(e) {
-      console.warn("Todoist add failed:", e);
+      console.warn("Todoist add failed:", e.message);
       todoistProcessing.current.delete(item.id);
     }
   }
