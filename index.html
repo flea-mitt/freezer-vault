@@ -489,10 +489,13 @@ function App() {
     if (!todoistKey) return;
     todoistProcessing.current.add(item.id);
     try {
-      const res = await fetch("https://api.todoist.com/rest/v2/tasks", {
+      // Sync API v9 with token in body + form-encoded avoids CORS preflight
+      const params = new URLSearchParams({token: todoistKey, content: `🧊 Buy: ${item.name}`});
+      if (todoistProjectId) params.append("project_id", todoistProjectId);
+      const res = await fetch("https://api.todoist.com/sync/v9/items/add", {
         method: "POST",
-        headers: {"Content-Type":"application/json", "Authorization":`Bearer ${todoistKey}`},
-        body: JSON.stringify({content:`🧊 Buy: ${item.name}`, labels:["freezer","shopping"], ...(todoistProjectId ? {project_id:todoistProjectId} : {})})
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: params.toString()
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const task = await res.json();
