@@ -2029,6 +2029,34 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   const editSlotLabel = editCell ? SLOTS.find(s=>s.key===editCell.slot)?.label : "";
   const editPersonName = editCell ? (editCell.person==="p1"?person1Name:person2Name) : "";
 
+  // Build defrost schedule: for each freezer item in the plan, take out 1 day before
+  const todayIso = new Date().toISOString().split("T")[0];
+  const defrostMap = {};
+  weekDays.forEach((d, i) => {
+    const dayData = days[i] || {};
+    SLOTS.forEach(slot => {
+      ["p1","p2"].forEach(person => {
+        normalizeSlot(dayData[person]?.[slot.key]).forEach(m => {
+          if (!m.itemId) return;
+          const defrost = new Date(d);
+          defrost.setDate(defrost.getDate() - 1);
+          const key = defrost.toISOString().split("T")[0];
+          if (!defrostMap[key]) defrostMap[key] = [];
+          defrostMap[key].push({
+            itemName: m.label,
+            forDay: DAY_NAMES[i],
+            slotLabel: slot.label,
+            personName: person==="p1" ? person1Name : person2Name,
+            defrostDate: defrost,
+          });
+        });
+      });
+    });
+  });
+  const defrostEntries = Object.entries(defrostMap)
+    .filter(([k]) => k >= todayIso)
+    .sort(([a],[b]) => a.localeCompare(b));
+
   return (
     <div>
       {/* Header */}
@@ -2042,6 +2070,32 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
         {saving && <span style={{fontSize:11,color:"rgba(125,211,252,.5)"}}>saving…</span>}
         {loading && <span style={{fontSize:11,color:"rgba(125,211,252,.5)"}}>loading…</span>}
       </div>
+
+      {/* Defrost schedule */}
+      {defrostEntries.length > 0 && (
+        <div style={{marginBottom:20,background:"rgba(251,146,60,.06)",border:"1px solid rgba(251,146,60,.18)",borderRadius:12,padding:"14px 16px"}}>
+          <div className="lbl" style={{color:"#FB923C",fontSize:9,marginBottom:12}}>Take out of freezer</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {defrostEntries.map(([dateStr, entries]) => {
+              const isDefrostToday = dateStr === todayIso;
+              const label = isDefrostToday ? "Today" : entries[0].defrostDate.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"short"});
+              return (
+                <div key={dateStr} style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+                  <div style={{flexShrink:0,minWidth:80,fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:11,color:isDefrostToday?"#FB923C":"#FDE68A",paddingTop:1}}>{label}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {entries.map((e,ei)=>(
+                      <div key={ei} style={{fontSize:11,background:"rgba(251,146,60,.1)",border:"1px solid rgba(251,146,60,.22)",borderRadius:8,padding:"3px 10px",color:"#FED7AA"}}>
+                        {e.itemName}
+                        <span style={{color:"rgba(255,255,255,.35)",marginLeft:5,fontSize:10}}>for {e.forDay} {e.slotLabel.toLowerCase()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 7-day grid */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8,minWidth:760}}>
