@@ -147,7 +147,7 @@ const STORAGE_GUIDE = [
 function suggestBestBefore(name, dateFrozen, category) {
   if (!name || name.length < 3) return null;
   const lower = name.toLowerCase();
-  const cookedCats = ["Cooked Meals","Soups & Broths","Sauces","Slow Cooker Bags"];
+  const cookedCats = ["Cooked Meals","Soups & Broths","Sauces","Slow Cooker Bags","Cooked Protein"];
   const isCooked = cookedCats.includes(category);
   const isRaw    = category === "Proteins";
 
