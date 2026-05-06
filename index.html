@@ -1537,15 +1537,20 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
   }
 
   async function fetchTodoistProjects(token) {
+    const useToken = token || todoistKey;
+    if (!useToken) { setTdProjError("No token saved yet."); return; }
     setTdProjLoading(true); setTdProjError("");
     try {
       const res = await fetch("https://api.todoist.com/rest/v2/projects", {
-        headers: {"Authorization": `Bearer ${token || todoistKey}`}
+        headers: {"Authorization": `Bearer ${useToken}`}
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const body = await res.text().catch(()=>"");
+        throw new Error(`HTTP ${res.status}${body ? ": " + body.slice(0,120) : ""}`);
+      }
       const projects = await res.json();
       setTdProjects(projects);
-    } catch(e) { setTdProjError("Could not load projects: " + e.message); }
+    } catch(e) { setTdProjError(e.message); }
     setTdProjLoading(false);
   }
 
@@ -1556,7 +1561,7 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
 
   useEffect(() => {
     if (todoistKey && !tdProjects.length) fetchTodoistProjects(todoistKey);
-  }, []);
+  }, [todoistKey]);
 
   async function persist(updated) {
     await db.collection("config").doc("settings").set({categories: updated}, {merge: true});
