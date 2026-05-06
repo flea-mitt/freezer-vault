@@ -282,9 +282,12 @@ function App() {
   const [clock,         setClock]        = useState(new Date());
   const [storedCategories, setStoredCategories] = useState(null);
   const [usdaKey,          setUsdaKey]          = useState("");
+  const [todoistKey,       setTodoistKey]       = useState("");
+  const [todoistProjectId, setTodoistProjectId] = useState("");
   const [totalGrams,       setTotalGrams]       = useState("");
   const [converting,       setConverting]       = useState(false);
   const [convertError,     setConvertError]     = useState("");
+  const todoistProcessing  = React.useRef(new Set());
 
   useEffect(() => {
     const t = setInterval(() => setClock(new Date()), 30000);
@@ -293,7 +296,12 @@ function App() {
 
   useEffect(() => {
     db.collection("config").doc("settings").get()
-      .then(snap => { if (snap.exists) { if (snap.data().categories) setStoredCategories(snap.data().categories); if (snap.data().usdaKey) setUsdaKey(snap.data().usdaKey); } })
+      .then(snap => { if (snap.exists) {
+        if (snap.data().categories)        setStoredCategories(snap.data().categories);
+        if (snap.data().usdaKey)           setUsdaKey(snap.data().usdaKey);
+        if (snap.data().todoistKey)        setTodoistKey(snap.data().todoistKey);
+        if (snap.data().todoistProjectId)  setTodoistProjectId(snap.data().todoistProjectId);
+      }})
       .catch(() => {});
   }, []);
 
@@ -444,7 +452,12 @@ function App() {
         await logHistory("removed", item, {note:"Last portion used"});
       } else {
         const newBags = Math.ceil(newPortions / qty);
-        await db.collection("items").doc(id).update({totalPortions:newPortions, bags:newBags, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+        const minThresh = Number(it.minBags||1);
+        const wasLow = currentPortions <= minThresh;
+        const nowAbove = newPortions > minThresh;
+        const clearTodoist = wasLow && nowAbove && it.todoistAdded ? {todoistAdded:false, todoistTaskId:null} : {};
+        if (wasLow && nowAbove) todoistProcessing.current.delete(id);
+        await db.collection("items").doc(id).update({totalPortions:newPortions, bags:newBags, updatedAt:firebase.firestore.FieldValue.serverTimestamp(), ...clearTodoist});
         await logHistory(delta > 0 ? "portions_added" : "portions_removed", item, {from:currentPortions, to:newPortions});
       }
     } catch(e) {}
@@ -471,6 +484,36 @@ function App() {
     } catch(e) { alert("Move failed: " + e.message); }
     setSyncing(false);
   }
+
+  async function addToTodoist(item) {
+    if (!todoistKey) return;
+    todoistProcessing.current.add(item.id);
+    try {
+      const res = await fetch("https://api.todoist.com/rest/v2/tasks", {
+        method: "POST",
+        headers: {"Content-Type":"application/json", "Authorization":`Bearer ${todoistKey}`},
+        body: JSON.stringify({content:`🧊 Buy: ${item.name}`, labels:["freezer","shopping"], ...(todoistProjectId ? {project_id:todoistProjectId} : {})})
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const task = await res.json();
+      await db.collection("items").doc(item.id).update({todoistAdded:true, todoistTaskId:task.id, updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    } catch(e) {
+      console.warn("Todoist add failed:", e);
+      todoistProcessing.current.delete(item.id);
+    }
+  }
+
+  useEffect(() => {
+    if (!todoistKey || !items.length) return;
+    const toAdd = items.filter(it =>
+      it.notify &&
+      itemPortions(it) <= (it.minBags||1) &&
+      !it.todoistAdded
+    );
+    toAdd.forEach(it => {
+      if (!todoistProcessing.current.has(it.id)) addToTodoist(it);
+    });
+  }, [items, todoistKey]);
 
   async function convertToPortions() {
     if (!usdaKey || !form.name.trim() || !totalGrams) return;
@@ -750,7 +793,7 @@ function App() {
         )}
 
         {activeFreezer==="admin" && isOwner && (
-          <AdminPanel db={db} allCategories={allCategories} setStoredCategories={setStoredCategories} usdaKey={usdaKey} setUsdaKey={setUsdaKey}/>
+          <AdminPanel db={db} allCategories={allCategories} setStoredCategories={setStoredCategories} usdaKey={usdaKey} setUsdaKey={setUsdaKey} todoistKey={todoistKey} setTodoistKey={setTodoistKey} todoistProjectId={todoistProjectId} setTodoistProjectId={setTodoistProjectId}/>
         )}
 
         {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="map" && (
@@ -1078,6 +1121,7 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,onMove,kiosk,isGreen,isOwner}) {
             {ei && <span className={ei.pulse?"pulse":""} style={{fontSize:10,color:ei.color,background:`${ei.color}18`,border:`1px solid ${ei.color}33`,borderRadius:10,padding:"1px 7px",flexShrink:0}}>{ei.label}</span>}
             {item.notify && totalPortions<=(item.minBags||1) && <span style={{fontSize:10,color:"#F87171",background:"rgba(248,113,113,.15)",border:"1px solid rgba(248,113,113,.3)",borderRadius:10,padding:"1px 7px",flexShrink:0}}>🔔 low</span>}
             {item.notify && totalPortions>(item.minBags||1) && <span style={{fontSize:10,color:"rgba(255,255,255,.25)",flexShrink:0}}>🔔</span>}
+            {item.todoistAdded && <span style={{fontSize:10,color:"#A78BFA",background:"rgba(167,139,250,.12)",border:"1px solid rgba(167,139,250,.25)",borderRadius:10,padding:"1px 7px",flexShrink:0}}>🛒 on list</span>}
             {item.group && <span style={{fontSize:10,color:"rgba(255,255,255,.25)",background:"rgba(255,255,255,.06)",borderRadius:10,padding:"1px 7px",flexShrink:0}}>⛓ {item.group}</span>}
           </div>
           <div style={{display:"flex",gap:6,marginTop:5,flexWrap:"wrap",alignItems:"center"}}>
@@ -1456,15 +1500,21 @@ function PriorityPanel({items, CATEGORIES, FREEZERS, getZone, expiryInfo, daysUn
   );
 }
 
-function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey}) {
-  const [newCat,    setNewCat]    = useState("");
-  const [editIdx,   setEditIdx]   = useState(null);
-  const [editVal,   setEditVal]   = useState("");
-  const [busy,      setBusy]      = useState(false);
-  const [error,     setError]     = useState("");
-  const [keyInput,  setKeyInput]  = useState(usdaKey||"");
-  const [keySaving, setKeySaving] = useState(false);
-  const [keySaved,  setKeySaved]  = useState(false);
+function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey, todoistKey, setTodoistKey, todoistProjectId, setTodoistProjectId}) {
+  const [newCat,        setNewCat]        = useState("");
+  const [editIdx,       setEditIdx]       = useState(null);
+  const [editVal,       setEditVal]       = useState("");
+  const [busy,          setBusy]          = useState(false);
+  const [error,         setError]         = useState("");
+  const [keyInput,      setKeyInput]      = useState(usdaKey||"");
+  const [keySaving,     setKeySaving]     = useState(false);
+  const [keySaved,      setKeySaved]      = useState(false);
+  const [tdInput,       setTdInput]       = useState(todoistKey||"");
+  const [tdSaving,      setTdSaving]      = useState(false);
+  const [tdSaved,       setTdSaved]       = useState(false);
+  const [tdProjects,    setTdProjects]    = useState([]);
+  const [tdProjLoading, setTdProjLoading] = useState(false);
+  const [tdProjError,   setTdProjError]   = useState("");
 
   async function saveUsdaKey() {
     setKeySaving(true);
@@ -1474,6 +1524,39 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
     } catch(e) { setError("Key save failed: " + e.message); }
     setKeySaving(false);
   }
+
+  async function saveTodoistKey() {
+    setTdSaving(true); setTdProjError("");
+    try {
+      const token = tdInput.trim();
+      await db.collection("config").doc("settings").set({todoistKey: token}, {merge:true});
+      setTodoistKey(token); setTdSaved(true); setTimeout(()=>setTdSaved(false), 2000);
+      fetchTodoistProjects(token);
+    } catch(e) { setTdProjError("Save failed: " + e.message); }
+    setTdSaving(false);
+  }
+
+  async function fetchTodoistProjects(token) {
+    setTdProjLoading(true); setTdProjError("");
+    try {
+      const res = await fetch("https://api.todoist.com/rest/v2/projects", {
+        headers: {"Authorization": `Bearer ${token || todoistKey}`}
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const projects = await res.json();
+      setTdProjects(projects);
+    } catch(e) { setTdProjError("Could not load projects: " + e.message); }
+    setTdProjLoading(false);
+  }
+
+  async function saveTodoistProject(pid) {
+    await db.collection("config").doc("settings").set({todoistProjectId: pid}, {merge:true});
+    setTodoistProjectId(pid);
+  }
+
+  useEffect(() => {
+    if (todoistKey && !tdProjects.length) fetchTodoistProjects(todoistKey);
+  }, []);
 
   async function persist(updated) {
     await db.collection("config").doc("settings").set({categories: updated}, {merge: true});
@@ -1572,6 +1655,48 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
           </button>
         </div>
         {usdaKey && !keySaved && <div style={{marginTop:6,fontSize:11,color:"#4ADE80"}}>✓ Key saved</div>}
+      </div>
+
+      {/* Todoist Integration */}
+      <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.1)",borderRadius:12,padding:"16px 18px",marginTop:12}}>
+        <div className="lbl" style={{color:"#7DD3FC",marginBottom:6,fontSize:9}}>Todoist Integration</div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:10}}>
+          API token from <span style={{color:"#38BDF8"}}>todoist.com/app/settings/integrations/developer</span> — low-stock 🔔 items are automatically added to your chosen project.
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <input className="inp" placeholder="Paste your Todoist API token…" value={tdInput}
+            onChange={e=>setTdInput(e.target.value)}
+            type="password"
+            style={{flex:1,fontSize:13}}/>
+          <button className="btn btn-primary" onClick={saveTodoistKey} disabled={tdSaving||!tdInput.trim()} style={{fontSize:11,whiteSpace:"nowrap"}}>
+            {tdSaving?"…":tdSaved?"✓ Saved":"Save token"}
+          </button>
+        </div>
+        {todoistKey && !tdSaved && <div style={{marginTop:6,fontSize:11,color:"#4ADE80"}}>✓ Token saved</div>}
+        {tdProjError && <div style={{marginTop:6,fontSize:11,color:"#F87171"}}>{tdProjError}</div>}
+        {todoistKey && (
+          <div style={{marginTop:10}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginBottom:6}}>Shopping list project</div>
+            {tdProjLoading
+              ? <div style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>Loading projects…</div>
+              : tdProjects.length > 0
+                ? <select className="inp" value={todoistProjectId}
+                    onChange={e=>saveTodoistProject(e.target.value)}
+                    style={{width:"100%",fontSize:12}}>
+                    <option value="">Inbox (default)</option>
+                    {tdProjects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                : <button className="btn btn-ghost" style={{fontSize:11,padding:"4px 10px"}} onClick={()=>fetchTodoistProjects()}>
+                    Load projects
+                  </button>
+            }
+            {todoistProjectId && tdProjects.length > 0 && (
+              <div style={{marginTop:5,fontSize:11,color:"#4ADE80"}}>
+                ✓ Adding to: {tdProjects.find(p=>p.id===todoistProjectId)?.name || "selected project"}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
