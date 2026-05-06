@@ -2063,9 +2063,17 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
                       const color = person==="p1" ? p1Color : p2Color;
                       const pName = person==="p1" ? person1Name : person2Name;
                       const mealArr = normalizeSlot(dayData[person]?.[slot.key]);
+                      const slotKcal = mealArr.reduce((sum,m) => {
+                        if (!m.itemId) return sum;
+                        const cal = Number(items.find(it=>it.id===m.itemId)?.calories||0);
+                        return sum + cal;
+                      }, 0);
                       return (
                         <div key={person} style={{marginBottom:4}}>
-                          <div style={{fontSize:8,color:`${color}55`,marginBottom:2}}>{pName}</div>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
+                            <div style={{fontSize:8,color:`${color}55`}}>{pName}</div>
+                            {slotKcal > 0 && <div style={{fontSize:8,color:`${color}70`}}>{slotKcal} kcal</div>}
+                          </div>
                           {mealArr.map((m,mi)=>(
                             <div key={mi} style={{fontSize:10,background:`${color}10`,border:`1px solid ${color}20`,borderRadius:5,padding:"2px 5px",marginBottom:2,display:"flex",gap:3,alignItems:"center"}}>
                               <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"rgba(255,255,255,.8)"}}>{m.label}</span>
