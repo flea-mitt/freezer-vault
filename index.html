@@ -1950,7 +1950,7 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   const [editItemId, setEditItemId] = useState("");
   const [editMode, setEditMode] = useState("text");
 
-  const SLOTS = [{key:"b",label:"Breakfast"},{key:"l",label:"Lunch"},{key:"d",label:"Dinner"}];
+  const SLOTS = [{key:"b",label:"Breakfast"},{key:"l",label:"Lunch"},{key:"d",label:"Dinner"},{key:"s",label:"Snacks"}];
   const weekKey = weekStart.toISOString().split("T")[0];
 
   function normalizeSlot(val) {
@@ -2141,7 +2141,7 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
                         </div>
                       );
                     })}
-                    {slot.key !== "d" && <div style={{height:1,background:"rgba(255,255,255,.05)",marginTop:6}}/>}
+                    {slot.key !== "s" && <div style={{height:1,background:"rgba(255,255,255,.05)",marginTop:6}}/>}
                   </div>
                 );
               })}
@@ -2183,7 +2183,7 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
 }
 
 function AddToMealModal({db, item, person1Name, person2Name, onClose}) {
-  const SLOTS = [{key:"b",label:"Breakfast"},{key:"l",label:"Lunch"},{key:"d",label:"Dinner"}];
+  const SLOTS = [{key:"b",label:"Breakfast"},{key:"l",label:"Lunch"},{key:"d",label:"Dinner"},{key:"s",label:"Snacks"}];
   const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   const todayDayIdx = () => { const day=new Date().getDay(); return day===0?6:day-1; };
 
