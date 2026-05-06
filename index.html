@@ -1512,9 +1512,8 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
   const [tdInput,       setTdInput]       = useState(todoistKey||"");
   const [tdSaving,      setTdSaving]      = useState(false);
   const [tdSaved,       setTdSaved]       = useState(false);
-  const [tdProjects,    setTdProjects]    = useState([]);
-  const [tdProjLoading, setTdProjLoading] = useState(false);
-  const [tdProjError,   setTdProjError]   = useState("");
+  const [tdProjInput,   setTdProjInput]   = useState(todoistProjectId||"");
+  const [tdProjSaved,   setTdProjSaved]   = useState(false);
 
   async function saveUsdaKey() {
     setKeySaving(true);
@@ -1526,42 +1525,20 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
   }
 
   async function saveTodoistKey() {
-    setTdSaving(true); setTdProjError("");
+    setTdSaving(true);
     try {
       const token = tdInput.trim();
       await db.collection("config").doc("settings").set({todoistKey: token}, {merge:true});
       setTodoistKey(token); setTdSaved(true); setTimeout(()=>setTdSaved(false), 2000);
-      fetchTodoistProjects(token);
-    } catch(e) { setTdProjError("Save failed: " + e.message); }
+    } catch(e) { setError("Save failed: " + e.message); }
     setTdSaving(false);
   }
 
-  async function fetchTodoistProjects(token) {
-    const useToken = token || todoistKey;
-    if (!useToken) { setTdProjError("No token saved yet."); return; }
-    setTdProjLoading(true); setTdProjError("");
-    try {
-      const res = await fetch("https://api.todoist.com/rest/v2/projects", {
-        headers: {"Authorization": `Bearer ${useToken}`}
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(()=>"");
-        throw new Error(`HTTP ${res.status}${body ? ": " + body.slice(0,120) : ""}`);
-      }
-      const projects = await res.json();
-      setTdProjects(projects);
-    } catch(e) { setTdProjError(e.message); }
-    setTdProjLoading(false);
-  }
-
-  async function saveTodoistProject(pid) {
+  async function saveTodoistProject() {
+    const pid = tdProjInput.trim();
     await db.collection("config").doc("settings").set({todoistProjectId: pid}, {merge:true});
-    setTodoistProjectId(pid);
+    setTodoistProjectId(pid); setTdProjSaved(true); setTimeout(()=>setTdProjSaved(false), 2000);
   }
-
-  useEffect(() => {
-    if (todoistKey && !tdProjects.length) fetchTodoistProjects(todoistKey);
-  }, [todoistKey]);
 
   async function persist(updated) {
     await db.collection("config").doc("settings").set({categories: updated}, {merge: true});
@@ -1678,28 +1655,21 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
           </button>
         </div>
         {todoistKey && !tdSaved && <div style={{marginTop:6,fontSize:11,color:"#4ADE80"}}>✓ Token saved</div>}
-        {tdProjError && <div style={{marginTop:6,fontSize:11,color:"#F87171"}}>{tdProjError}</div>}
         {todoistKey && (
           <div style={{marginTop:10}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginBottom:6}}>Shopping list project</div>
-            {tdProjLoading
-              ? <div style={{fontSize:11,color:"rgba(255,255,255,.3)"}}>Loading projects…</div>
-              : tdProjects.length > 0
-                ? <select className="inp" value={todoistProjectId}
-                    onChange={e=>saveTodoistProject(e.target.value)}
-                    style={{width:"100%",fontSize:12}}>
-                    <option value="">Inbox (default)</option>
-                    {tdProjects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                : <button className="btn btn-ghost" style={{fontSize:11,padding:"4px 10px"}} onClick={()=>fetchTodoistProjects()}>
-                    Load projects
-                  </button>
-            }
-            {todoistProjectId && tdProjects.length > 0 && (
-              <div style={{marginTop:5,fontSize:11,color:"#4ADE80"}}>
-                ✓ Adding to: {tdProjects.find(p=>p.id===todoistProjectId)?.name || "selected project"}
-              </div>
-            )}
+            <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginBottom:4}}>Project ID (optional — leave blank for Inbox)</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,.2)",marginBottom:8}}>
+              Find it in Todoist: open your shopping list project → copy the number from the URL: todoist.com/app/project/<span style={{color:"#7DD3FC"}}>2345678901</span>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <input className="inp" placeholder="e.g. 2345678901" value={tdProjInput}
+                onChange={e=>setTdProjInput(e.target.value)}
+                style={{flex:1,fontSize:13}}/>
+              <button className="btn btn-primary" onClick={saveTodoistProject} style={{fontSize:11,whiteSpace:"nowrap"}}>
+                {tdProjSaved ? "✓ Saved" : "Save"}
+              </button>
+            </div>
+            {todoistProjectId && <div style={{marginTop:6,fontSize:11,color:"#4ADE80"}}>✓ Project ID saved</div>}
           </div>
         )}
       </div>
