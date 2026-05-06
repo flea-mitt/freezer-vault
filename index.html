@@ -284,6 +284,7 @@ function App() {
   const [usdaKey,          setUsdaKey]          = useState("");
   const [todoistKey,       setTodoistKey]       = useState("");
   const [todoistProjectId, setTodoistProjectId] = useState("");
+  const [todoistWorkerUrl, setTodoistWorkerUrl] = useState("");
   const [totalGrams,       setTotalGrams]       = useState("");
   const [converting,       setConverting]       = useState(false);
   const [convertError,     setConvertError]     = useState("");
@@ -301,6 +302,7 @@ function App() {
         if (snap.data().usdaKey)           setUsdaKey(snap.data().usdaKey);
         if (snap.data().todoistKey)        setTodoistKey(snap.data().todoistKey);
         if (snap.data().todoistProjectId)  setTodoistProjectId(snap.data().todoistProjectId);
+        if (snap.data().todoistWorkerUrl)  setTodoistWorkerUrl(snap.data().todoistWorkerUrl);
       }})
       .catch(() => {});
   }, []);
@@ -486,16 +488,13 @@ function App() {
   }
 
   async function addToTodoist(item) {
-    if (!todoistKey) return;
+    if (!todoistKey || !todoistWorkerUrl) return;
     todoistProcessing.current.add(item.id);
     try {
-      // Sync API v9 with token in body + form-encoded avoids CORS preflight
-      const params = new URLSearchParams({token: todoistKey, content: `🧊 Buy: ${item.name}`});
-      if (todoistProjectId) params.append("project_id", todoistProjectId);
-      const res = await fetch("https://api.todoist.com/sync/v9/items/add", {
+      const res = await fetch(todoistWorkerUrl, {
         method: "POST",
-        headers: {"Content-Type": "application/x-www-form-urlencoded"},
-        body: params.toString()
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token: todoistKey, name: item.name, projectId: todoistProjectId||""})
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const task = await res.json();
@@ -796,7 +795,7 @@ function App() {
         )}
 
         {activeFreezer==="admin" && isOwner && (
-          <AdminPanel db={db} allCategories={allCategories} setStoredCategories={setStoredCategories} usdaKey={usdaKey} setUsdaKey={setUsdaKey} todoistKey={todoistKey} setTodoistKey={setTodoistKey} todoistProjectId={todoistProjectId} setTodoistProjectId={setTodoistProjectId}/>
+          <AdminPanel db={db} allCategories={allCategories} setStoredCategories={setStoredCategories} usdaKey={usdaKey} setUsdaKey={setUsdaKey} todoistKey={todoistKey} setTodoistKey={setTodoistKey} todoistProjectId={todoistProjectId} setTodoistProjectId={setTodoistProjectId} todoistWorkerUrl={todoistWorkerUrl} setTodoistWorkerUrl={setTodoistWorkerUrl}/>
         )}
 
         {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="map" && (
@@ -1503,7 +1502,7 @@ function PriorityPanel({items, CATEGORIES, FREEZERS, getZone, expiryInfo, daysUn
   );
 }
 
-function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey, todoistKey, setTodoistKey, todoistProjectId, setTodoistProjectId}) {
+function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey, todoistKey, setTodoistKey, todoistProjectId, setTodoistProjectId, todoistWorkerUrl, setTodoistWorkerUrl}) {
   const [newCat,        setNewCat]        = useState("");
   const [editIdx,       setEditIdx]       = useState(null);
   const [editVal,       setEditVal]       = useState("");
@@ -1515,8 +1514,10 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
   const [tdInput,       setTdInput]       = useState(todoistKey||"");
   const [tdSaving,      setTdSaving]      = useState(false);
   const [tdSaved,       setTdSaved]       = useState(false);
-  const [tdProjInput,   setTdProjInput]   = useState(todoistProjectId||"");
-  const [tdProjSaved,   setTdProjSaved]   = useState(false);
+  const [tdProjInput,    setTdProjInput]    = useState(todoistProjectId||"");
+  const [tdProjSaved,    setTdProjSaved]    = useState(false);
+  const [tdWorkerInput,  setTdWorkerInput]  = useState(todoistWorkerUrl||"");
+  const [tdWorkerSaved,  setTdWorkerSaved]  = useState(false);
 
   async function saveUsdaKey() {
     setKeySaving(true);
@@ -1541,6 +1542,12 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
     const pid = tdProjInput.trim();
     await db.collection("config").doc("settings").set({todoistProjectId: pid}, {merge:true});
     setTodoistProjectId(pid); setTdProjSaved(true); setTimeout(()=>setTdProjSaved(false), 2000);
+  }
+
+  async function saveTodoistWorkerUrl() {
+    const url = tdWorkerInput.trim();
+    await db.collection("config").doc("settings").set({todoistWorkerUrl: url}, {merge:true});
+    setTodoistWorkerUrl(url); setTdWorkerSaved(true); setTimeout(()=>setTdWorkerSaved(false), 2000);
   }
 
   async function persist(updated) {
@@ -1658,7 +1665,19 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
           </button>
         </div>
         {todoistKey && !tdSaved && <div style={{marginTop:6,fontSize:11,color:"#4ADE80"}}>✓ Token saved</div>}
-        {todoistKey && (
+        <div style={{marginTop:10}}>
+          <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginBottom:4}}>Cloudflare Worker URL</div>
+          <div style={{display:"flex",gap:8}}>
+            <input className="inp" placeholder="https://your-worker.workers.dev" value={tdWorkerInput}
+              onChange={e=>setTdWorkerInput(e.target.value)}
+              style={{flex:1,fontSize:12}}/>
+            <button className="btn btn-primary" onClick={saveTodoistWorkerUrl} disabled={!tdWorkerInput.trim()} style={{fontSize:11,whiteSpace:"nowrap"}}>
+              {tdWorkerSaved ? "✓ Saved" : "Save"}
+            </button>
+          </div>
+          {todoistWorkerUrl && <div style={{marginTop:4,fontSize:11,color:"#4ADE80"}}>✓ Worker connected</div>}
+        </div>
+        {todoistKey && todoistWorkerUrl && (
           <div style={{marginTop:10}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginBottom:4}}>Project ID (optional — leave blank for Inbox)</div>
             <div style={{fontSize:11,color:"rgba(255,255,255,.2)",marginBottom:8}}>
