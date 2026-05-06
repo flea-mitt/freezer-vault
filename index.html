@@ -113,22 +113,22 @@ const auth = window.__auth;
 const todayStr = () => new Date().toISOString().split("T")[0];
 
 const STORAGE_GUIDE = [
-  {keys:["salmon","trout","mackerel","sardine","tuna","herring"],months:3,label:"oily fish"},
-  {keys:["cod","haddock","plaice","sole","pollock","halibut","sea bass","sea bream","tilapia","whiting"],months:6,label:"white fish"},
-  {keys:["prawn","shrimp","scallop","mussel","clam","squid","crab","lobster"],months:3,label:"shellfish"},
-  {keys:["chicken breast","chicken fillet"],months:9,label:"chicken breast"},
-  {keys:["whole chicken","whole turkey"],months:12,label:"whole poultry"},
-  {keys:["chicken","turkey","duck","poultry","hen"],months:9,label:"poultry"},
-  {keys:["beef mince","minced beef","ground beef"],months:4,label:"beef mince"},
-  {keys:["beef","steak","brisket","short rib","oxtail"],months:9,label:"beef"},
-  {keys:["lamb mince","minced lamb"],months:4,label:"lamb mince"},
-  {keys:["lamb","mutton"],months:9,label:"lamb"},
-  {keys:["sausage","banger"],months:2,label:"sausages"},
-  {keys:["bacon","pancetta","lardons"],months:1,label:"bacon/cured pork"},
-  {keys:["pork mince","minced pork"],months:4,label:"pork mince"},
-  {keys:["pork","ham","gammon"],months:6,label:"pork"},
-  {keys:["mince","ground"],months:4,label:"mince"},
-  {keys:["burger","patty"],months:4,label:"burgers"},
+  {keys:["salmon","trout","mackerel","sardine","tuna","herring"],months:3,label:"oily fish",raw:true},
+  {keys:["cod","haddock","plaice","sole","pollock","halibut","sea bass","sea bream","tilapia","whiting"],months:6,label:"white fish",raw:true},
+  {keys:["prawn","shrimp","scallop","mussel","clam","squid","crab","lobster"],months:3,label:"shellfish",raw:true},
+  {keys:["chicken breast","chicken fillet"],months:9,label:"chicken breast",raw:true},
+  {keys:["whole chicken","whole turkey"],months:12,label:"whole poultry",raw:true},
+  {keys:["chicken","turkey","duck","poultry","hen"],months:9,label:"poultry",raw:true},
+  {keys:["beef mince","minced beef","ground beef"],months:4,label:"beef mince",raw:true},
+  {keys:["beef","steak","brisket","short rib","oxtail"],months:9,label:"beef",raw:true},
+  {keys:["lamb mince","minced lamb"],months:4,label:"lamb mince",raw:true},
+  {keys:["lamb","mutton"],months:9,label:"lamb",raw:true},
+  {keys:["sausage","banger"],months:2,label:"sausages",raw:true},
+  {keys:["bacon","pancetta","lardons"],months:1,label:"bacon/cured pork",raw:true},
+  {keys:["pork mince","minced pork"],months:4,label:"pork mince",raw:true},
+  {keys:["pork","ham","gammon"],months:6,label:"pork",raw:true},
+  {keys:["mince","ground"],months:4,label:"mince",raw:true},
+  {keys:["burger","patty"],months:4,label:"burgers",raw:true},
   {keys:["soup","broth","stock","chowder"],months:3,label:"soups & broths"},
   {keys:["curry","stew","casserole","tagine","ragu","bolognese","chilli","chili"],months:3,label:"cooked dishes"},
   {keys:["pasta","lasagne","lasagna","cannelloni"],months:3,label:"cooked pasta dishes"},
@@ -144,16 +144,37 @@ const STORAGE_GUIDE = [
   {keys:["milk","cream"],months:3,label:"dairy"},
 ];
 
-function suggestBestBefore(name, dateFrozen) {
+function suggestBestBefore(name, dateFrozen, category) {
   if (!name || name.length < 3) return null;
   const lower = name.toLowerCase();
+  const cookedCats = ["Cooked Meals","Soups & Broths","Sauces","Slow Cooker Bags"];
+  const isCooked = cookedCats.includes(category);
+  const isRaw    = category === "Proteins";
+
+  function makeResult(entry, overrideMonths, overrideLabel) {
+    const months = overrideMonths ?? entry.months;
+    const label  = overrideLabel  ?? entry.label;
+    const base = dateFrozen ? new Date(dateFrozen) : new Date();
+    base.setMonth(base.getMonth() + months);
+    return { dateStr: base.toISOString().split("T")[0], months, label };
+  }
+
+  // First pass: find a match that suits the category
   for (const entry of STORAGE_GUIDE) {
-    if (entry.keys.some(k => lower.includes(k))) {
-      const base = dateFrozen ? new Date(dateFrozen) : new Date();
-      base.setMonth(base.getMonth() + entry.months);
-      return { dateStr: base.toISOString().split("T")[0], months: entry.months, label: entry.label };
+    if (!entry.keys.some(k => lower.includes(k))) continue;
+    if (isCooked && entry.raw) continue; // skip raw entries for cooked categories
+    if (isRaw && !entry.raw) continue;   // skip cooked entries for Proteins
+    return makeResult(entry);
+  }
+
+  // Fallback for cooked categories: raw protein matched but no cooked entry found — cap at 3 months
+  if (isCooked) {
+    for (const entry of STORAGE_GUIDE) {
+      if (!entry.keys.some(k => lower.includes(k))) continue;
+      return makeResult(entry, Math.min(entry.months, 3), `cooked ${entry.label}`);
     }
   }
+
   return null;
 }
 
@@ -890,7 +911,7 @@ function App() {
                 <Field label="BEST BEFORE">
                   <input className="inp" type="date" value={form.bestBefore} onChange={e=>setForm(f=>({...f,bestBefore:e.target.value}))}/>
                   {(()=>{
-                    const s=suggestBestBefore(form.name,form.dateFrozen);
+                    const s=suggestBestBefore(form.name,form.dateFrozen,form.category);
                     if(!s||form.bestBefore) return null;
                     return (
                       <div onClick={()=>setForm(f=>({...f,bestBefore:s.dateStr}))}
