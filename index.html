@@ -207,6 +207,13 @@ function fmtTime(ts) {
   return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"}) + " " +
          d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
 }
+function getWeekMonday(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+  d.setHours(0,0,0,0);
+  return d;
+}
 
 const INIT = {
   name:"", freezer:"chest", zone:"basket", category:"Cooked Meals",
@@ -287,6 +294,8 @@ function App() {
   const [todoistProjectId, setTodoistProjectId] = useState("");
   const [todoistWorkerUrl,  setTodoistWorkerUrl]  = useState("");
   const [expiryWebhookUrl, setExpiryWebhookUrl] = useState("");
+  const [person1Name,      setPerson1Name]      = useState("Tal");
+  const [person2Name,      setPerson2Name]      = useState("Kara");
   const [totalGrams,       setTotalGrams]       = useState("");
   const [converting,       setConverting]       = useState(false);
   const [convertError,     setConvertError]     = useState("");
@@ -306,6 +315,8 @@ function App() {
         if (snap.data().todoistProjectId)  setTodoistProjectId(snap.data().todoistProjectId);
         if (snap.data().todoistWorkerUrl)  setTodoistWorkerUrl(snap.data().todoistWorkerUrl);
         if (snap.data().expiryWebhookUrl) setExpiryWebhookUrl(snap.data().expiryWebhookUrl);
+        if (snap.data().person1Name) setPerson1Name(snap.data().person1Name);
+        if (snap.data().person2Name) setPerson2Name(snap.data().person2Name);
       }})
       .catch(() => {});
   }, []);
@@ -784,6 +795,7 @@ function App() {
         ))}
         <button className={`tab ${activeFreezer==="stockwatch"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("stockwatch");setAZ(null);}}>🔔 Stock Watch</button>
         <button className={`tab ${activeFreezer==="history"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("history");setAZ(null);}}>📋 History</button>
+        <button className={`tab ${activeFreezer==="mealplan"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("mealplan");setAZ(null);}}>🗓 Meal Plan</button>
         {isOwner && <button className={`tab ${activeFreezer==="admin"?"tab-on":"tab-off"}`} style={kiosk?{fontSize:14,padding:"8px 20px"}:{}} onClick={()=>{setAF("admin");setAZ(null);}}>⚙️ Admin</button>}
       </div>
 
@@ -818,10 +830,14 @@ function App() {
         )}
 
         {activeFreezer==="admin" && isOwner && (
-          <AdminPanel db={db} allCategories={allCategories} setStoredCategories={setStoredCategories} usdaKey={usdaKey} setUsdaKey={setUsdaKey} todoistKey={todoistKey} setTodoistKey={setTodoistKey} todoistProjectId={todoistProjectId} setTodoistProjectId={setTodoistProjectId} todoistWorkerUrl={todoistWorkerUrl} setTodoistWorkerUrl={setTodoistWorkerUrl} expiryWebhookUrl={expiryWebhookUrl} setExpiryWebhookUrl={setExpiryWebhookUrl}/>
+          <AdminPanel db={db} allCategories={allCategories} setStoredCategories={setStoredCategories} usdaKey={usdaKey} setUsdaKey={setUsdaKey} todoistKey={todoistKey} setTodoistKey={setTodoistKey} todoistProjectId={todoistProjectId} setTodoistProjectId={setTodoistProjectId} todoistWorkerUrl={todoistWorkerUrl} setTodoistWorkerUrl={setTodoistWorkerUrl} expiryWebhookUrl={expiryWebhookUrl} setExpiryWebhookUrl={setExpiryWebhookUrl} person1Name={person1Name} setPerson1Name={setPerson1Name} person2Name={person2Name} setPerson2Name={setPerson2Name}/>
         )}
 
-        {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="map" && (
+        {activeFreezer==="mealplan" && (
+          <MealPlanPanel db={db} items={items} person1Name={person1Name} person2Name={person2Name} isOwner={isOwner}/>
+        )}
+
+        {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && activeFreezer!=="mealplan" && view==="map" && (
           <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
             <div style={{flex:"0 0 auto"}}>
               <div className="lbl" style={{color:"rgba(125,211,252,.3)",marginBottom:9,fontSize:9}}>{fz.label} · {activeFreezer==="chest"?"Top View":"Front View"}</div>
@@ -864,7 +880,7 @@ function App() {
           </div>
         )}
 
-        {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && view==="list" && (
+        {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && activeFreezer!=="mealplan" && view==="list" && (
           <div>
             {fz.zones.map(zone=>{
               const zi=zoneItems(fz.id,zone.id);
@@ -1525,7 +1541,7 @@ function PriorityPanel({items, CATEGORIES, FREEZERS, getZone, expiryInfo, daysUn
   );
 }
 
-function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey, todoistKey, setTodoistKey, todoistProjectId, setTodoistProjectId, todoistWorkerUrl, setTodoistWorkerUrl, expiryWebhookUrl, setExpiryWebhookUrl}) {
+function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey, todoistKey, setTodoistKey, todoistProjectId, setTodoistProjectId, todoistWorkerUrl, setTodoistWorkerUrl, expiryWebhookUrl, setExpiryWebhookUrl, person1Name, setPerson1Name, person2Name, setPerson2Name}) {
   const [newCat,        setNewCat]        = useState("");
   const [editIdx,       setEditIdx]       = useState(null);
   const [editVal,       setEditVal]       = useState("");
@@ -1543,6 +1559,9 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
   const [tdWorkerSaved,   setTdWorkerSaved]   = useState(false);
   const [webhookInput,    setWebhookInput]    = useState(expiryWebhookUrl||"");
   const [webhookSaved,    setWebhookSaved]    = useState(false);
+  const [p1Input,         setP1Input]         = useState(person1Name||"");
+  const [p2Input,         setP2Input]         = useState(person2Name||"");
+  const [namesSaved,      setNamesSaved]      = useState(false);
 
   async function saveUsdaKey() {
     setKeySaving(true);
@@ -1579,6 +1598,14 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
     const url = webhookInput.trim();
     await db.collection("config").doc("settings").set({expiryWebhookUrl: url}, {merge:true});
     setExpiryWebhookUrl(url); setWebhookSaved(true); setTimeout(()=>setWebhookSaved(false), 2000);
+  }
+
+  async function savePeopleNames() {
+    const n1 = p1Input.trim() || "Person 1";
+    const n2 = p2Input.trim() || "Person 2";
+    await db.collection("config").doc("settings").set({person1Name: n1, person2Name: n2}, {merge:true});
+    setPerson1Name(n1); setPerson2Name(n2);
+    setNamesSaved(true); setTimeout(()=>setNamesSaved(false), 2000);
   }
 
   async function persist(updated) {
@@ -1743,6 +1770,25 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
         </div>
         {expiryWebhookUrl && <div style={{marginTop:6,fontSize:11,color:"#4ADE80"}}>✓ Webhook saved</div>}
       </div>
+
+      {/* Meal Planner People */}
+      <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(125,211,252,.1)",borderRadius:12,padding:"16px 18px",marginTop:12}}>
+        <div className="lbl" style={{color:"#7DD3FC",marginBottom:6,fontSize:9}}>Meal Plan — People</div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:10}}>Names shown in the weekly meal planner.</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          <div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginBottom:4}}>Person 1</div>
+            <input className="inp" placeholder="e.g. Tal" value={p1Input} onChange={e=>setP1Input(e.target.value)} style={{fontSize:13}}/>
+          </div>
+          <div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginBottom:4}}>Person 2</div>
+            <input className="inp" placeholder="e.g. Kara" value={p2Input} onChange={e=>setP2Input(e.target.value)} style={{fontSize:13}}/>
+          </div>
+        </div>
+        <button className="btn btn-primary" onClick={savePeopleNames} style={{fontSize:11}}>
+          {namesSaved ? "✓ Saved" : "Save names"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1883,6 +1929,177 @@ function HistoryPanel({db, FREEZERS, getZone}) {
         <button className="btn btn-ghost" style={{marginTop:10,alignSelf:"center"}} onClick={loadMore}>
           Load more
         </button>
+      )}
+    </div>
+  );
+}
+
+function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
+  const [weekStart, setWeekStart] = useState(() => getWeekMonday(new Date()));
+  const [days, setDays] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editCell, setEditCell] = useState(null); // {dayIdx, person}
+  const [editText, setEditText] = useState("");
+  const [editItemId, setEditItemId] = useState("");
+  const [editMode, setEditMode] = useState("text");
+
+  const weekKey = weekStart.toISOString().split("T")[0];
+
+  useEffect(() => {
+    setLoading(true);
+    db.collection("mealPlan").doc(weekKey).get()
+      .then(snap => { setDays(snap.exists ? (snap.data().days || {}) : {}); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [weekKey]);
+
+  async function saveDays(updated) {
+    setSaving(true);
+    try {
+      await db.collection("mealPlan").doc(weekKey).set({weekStart: weekKey, days: updated}, {merge: true});
+      setDays(updated);
+    } catch(e) { console.warn("Meal plan save failed:", e); }
+    setSaving(false);
+  }
+
+  function openAdd(dayIdx, person) {
+    if (!isOwner) return;
+    setEditCell({dayIdx, person});
+    setEditText(""); setEditItemId(""); setEditMode("text");
+  }
+
+  function removeMeal(dayIdx, person, mi) {
+    if (!isOwner) return;
+    const updated = {...days};
+    const day = {...(updated[dayIdx] || {p1:[], p2:[]})};
+    day[person] = (day[person] || []).filter((_,i) => i !== mi);
+    updated[dayIdx] = day;
+    saveDays(updated);
+  }
+
+  function saveEdit() {
+    if (!editCell) return;
+    const {dayIdx, person} = editCell;
+    let meal;
+    if (editMode === "item" && editItemId) {
+      const it = items.find(i => i.id === editItemId);
+      meal = {itemId: editItemId, label: it ? it.name : editItemId};
+    } else if (editText.trim()) {
+      meal = {label: editText.trim()};
+    } else return;
+    const updated = {...days};
+    const day = {...(updated[dayIdx] || {p1:[], p2:[]})};
+    day[person] = [...(day[person] || []), meal];
+    updated[dayIdx] = day;
+    saveDays(updated);
+    setEditCell(null);
+  }
+
+  const weekDays = Array.from({length: 7}, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+  const DAY_NAMES = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const today = new Date().toDateString();
+
+  function prevWeek() { const d = new Date(weekStart); d.setDate(d.getDate()-7); setWeekStart(d); }
+  function nextWeek() { const d = new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d); }
+  function goToday()  { setWeekStart(getWeekMonday(new Date())); }
+
+  const p1Color = "#7DD3FC"; const p2Color = "#34D399";
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        <button className="btn btn-ghost" style={{padding:"4px 12px",fontSize:12}} onClick={prevWeek}>← Prev</button>
+        <button className="btn btn-ghost" style={{padding:"4px 12px",fontSize:12}} onClick={goToday}>Today</button>
+        <span style={{fontSize:13,color:"#BAE6FD",fontFamily:"'Space Grotesk',sans-serif",fontWeight:600}}>
+          Week of {weekStart.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+        </span>
+        <button className="btn btn-ghost" style={{padding:"4px 12px",fontSize:12}} onClick={nextWeek}>Next →</button>
+        {saving && <span style={{fontSize:11,color:"rgba(125,211,252,.5)"}}>saving…</span>}
+        {loading && <span style={{fontSize:11,color:"rgba(125,211,252,.5)"}}>loading…</span>}
+      </div>
+
+      {/* Legend */}
+      <div style={{display:"flex",gap:14,marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:8,height:8,borderRadius:"50%",background:p1Color}}/><span style={{fontSize:11,color:"rgba(255,255,255,.5)"}}>{person1Name}</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:8,height:8,borderRadius:"50%",background:p2Color}}/><span style={{fontSize:11,color:"rgba(255,255,255,.5)"}}>{person2Name}</span></div>
+      </div>
+
+      {/* 7-day grid */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8,minWidth:700}}>
+        {weekDays.map((d, i) => {
+          const dayData = days[i] || {p1:[], p2:[]};
+          const isToday = d.toDateString() === today;
+          return (
+            <div key={i} style={{background:isToday?"rgba(14,165,233,.1)":"rgba(255,255,255,.03)",border:`1px solid ${isToday?"rgba(14,165,233,.35)":"rgba(125,211,252,.1)"}`,borderRadius:10,padding:"10px 8px",minHeight:140}}>
+              <div style={{marginBottom:8}}>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,color:isToday?"#7DD3FC":"#BAE6FD"}}>{DAY_NAMES[i]}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{d.getDate()}/{d.getMonth()+1}</div>
+              </div>
+
+              {/* Person 1 */}
+              <div style={{marginBottom:8}}>
+                <div style={{fontSize:9,color:`${p1Color}88`,marginBottom:3,letterSpacing:".05em"}}>{person1Name}</div>
+                {(dayData.p1||[]).map((m,mi)=>(
+                  <div key={mi} style={{fontSize:10,background:`${p1Color}12`,border:`1px solid ${p1Color}22`,borderRadius:5,padding:"3px 5px",marginBottom:3,display:"flex",gap:3,alignItems:"center"}}>
+                    <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"rgba(255,255,255,.8)"}}>{m.label}</span>
+                    {isOwner && <span onClick={()=>removeMeal(i,"p1",mi)} style={{cursor:"pointer",color:"rgba(248,113,113,.5)",flexShrink:0,lineHeight:1}}>×</span>}
+                  </div>
+                ))}
+                {isOwner && <button onClick={()=>openAdd(i,"p1")} style={{fontSize:9,color:`${p1Color}55`,background:"none",border:`1px dashed ${p1Color}30`,borderRadius:5,padding:"2px 6px",cursor:"pointer",width:"100%",fontFamily:"inherit"}}>+ add</button>}
+              </div>
+
+              {/* Divider */}
+              <div style={{height:1,background:"rgba(255,255,255,.06)",marginBottom:8}}/>
+
+              {/* Person 2 */}
+              <div>
+                <div style={{fontSize:9,color:`${p2Color}88`,marginBottom:3,letterSpacing:".05em"}}>{person2Name}</div>
+                {(dayData.p2||[]).map((m,mi)=>(
+                  <div key={mi} style={{fontSize:10,background:`${p2Color}12`,border:`1px solid ${p2Color}22`,borderRadius:5,padding:"3px 5px",marginBottom:3,display:"flex",gap:3,alignItems:"center"}}>
+                    <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"rgba(255,255,255,.8)"}}>{m.label}</span>
+                    {isOwner && <span onClick={()=>removeMeal(i,"p2",mi)} style={{cursor:"pointer",color:"rgba(248,113,113,.5)",flexShrink:0,lineHeight:1}}>×</span>}
+                  </div>
+                ))}
+                {isOwner && <button onClick={()=>openAdd(i,"p2")} style={{fontSize:9,color:`${p2Color}55`,background:"none",border:`1px dashed ${p2Color}30`,borderRadius:5,padding:"2px 6px",cursor:"pointer",width:"100%",fontFamily:"inherit"}}>+ add</button>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add meal modal */}
+      {editCell && (
+        <div className="overlay" onClick={()=>setEditCell(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,marginBottom:14,color:"#BAE6FD"}}>
+              Add meal — {DAY_NAMES[editCell.dayIdx]}, {editCell.person==="p1"?person1Name:person2Name}
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:14}}>
+              <button className={`btn ${editMode==="text"?"btn-primary":"btn-ghost"}`} style={{flex:1}} onClick={()=>setEditMode("text")}>Free text</button>
+              <button className={`btn ${editMode==="item"?"btn-primary":"btn-ghost"}`} style={{flex:1}} onClick={()=>setEditMode("item")}>Freezer item</button>
+            </div>
+            {editMode==="text" ? (
+              <input className="inp" placeholder="What's for this meal?" value={editText} onChange={e=>setEditText(e.target.value)}
+                autoFocus onKeyDown={e=>e.key==="Enter"&&saveEdit()}/>
+            ) : (
+              <select className="inp" value={editItemId} onChange={e=>setEditItemId(e.target.value)}>
+                <option value="">— pick a freezer item —</option>
+                {[...items].sort((a,b)=>a.name.localeCompare(b.name)).map(it=>(
+                  <option key={it.id} value={it.id}>{it.name} ({FREEZERS[it.freezer]?.label || it.freezer})</option>
+                ))}
+              </select>
+            )}
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              <button className="btn btn-primary" style={{flex:1}} onClick={saveEdit}>Add</button>
+              <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setEditCell(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
