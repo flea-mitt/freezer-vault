@@ -1939,11 +1939,12 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   const [days, setDays] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editCell, setEditCell] = useState(null); // {dayIdx, person}
+  const [editCell, setEditCell] = useState(null); // {dayIdx, person, slot}
   const [editText, setEditText] = useState("");
   const [editItemId, setEditItemId] = useState("");
   const [editMode, setEditMode] = useState("text");
 
+  const SLOTS = [{key:"b",label:"Breakfast"},{key:"l",label:"Lunch"},{key:"d",label:"Dinner"}];
   const weekKey = weekStart.toISOString().split("T")[0];
 
   useEffect(() => {
@@ -1962,34 +1963,43 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
     setSaving(false);
   }
 
-  function openAdd(dayIdx, person) {
+  function openEdit(dayIdx, person, slot) {
     if (!isOwner) return;
-    setEditCell({dayIdx, person});
-    setEditText(""); setEditItemId(""); setEditMode("text");
+    const meal = (days[dayIdx]?.[person]?.[slot]) || null;
+    setEditCell({dayIdx, person, slot});
+    setEditText(meal?.label || "");
+    setEditItemId(meal?.itemId || "");
+    setEditMode(meal?.itemId ? "item" : "text");
   }
 
-  function removeMeal(dayIdx, person, mi) {
+  function clearSlot(dayIdx, person, slot) {
     if (!isOwner) return;
     const updated = {...days};
-    const day = {...(updated[dayIdx] || {p1:[], p2:[]})};
-    day[person] = (day[person] || []).filter((_,i) => i !== mi);
+    const day = {...(updated[dayIdx] || {})};
+    const personData = {...(day[person] || {})};
+    delete personData[slot];
+    day[person] = personData;
     updated[dayIdx] = day;
     saveDays(updated);
   }
 
   function saveEdit() {
     if (!editCell) return;
-    const {dayIdx, person} = editCell;
-    let meal;
+    const {dayIdx, person, slot} = editCell;
+    let meal = null;
     if (editMode === "item" && editItemId) {
       const it = items.find(i => i.id === editItemId);
       meal = {itemId: editItemId, label: it ? it.name : editItemId};
     } else if (editText.trim()) {
       meal = {label: editText.trim()};
-    } else return;
+    } else {
+      clearSlot(dayIdx, person, slot);
+      setEditCell(null);
+      return;
+    }
     const updated = {...days};
-    const day = {...(updated[dayIdx] || {p1:[], p2:[]})};
-    day[person] = [...(day[person] || []), meal];
+    const day = {...(updated[dayIdx] || {})};
+    day[person] = {...(day[person] || {}), [slot]: meal};
     updated[dayIdx] = day;
     saveDays(updated);
     setEditCell(null);
@@ -2009,6 +2019,25 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
 
   const p1Color = "#7DD3FC"; const p2Color = "#34D399";
 
+  function MealSlot({meal, color, onClick, onClear}) {
+    return meal ? (
+      <div style={{fontSize:10,background:`${color}12`,border:`1px solid ${color}25`,borderRadius:5,padding:"3px 6px",display:"flex",gap:3,alignItems:"center",cursor:"pointer"}}
+        onClick={onClick}>
+        <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"rgba(255,255,255,.85)"}}>{meal.label}</span>
+        {isOwner && <span onClick={e=>{e.stopPropagation();onClear();}} style={{cursor:"pointer",color:"rgba(248,113,113,.5)",flexShrink:0,lineHeight:1,fontSize:12}}>×</span>}
+      </div>
+    ) : (
+      isOwner ? (
+        <div onClick={onClick} style={{fontSize:9,color:`${color}40`,border:`1px dashed ${color}25`,borderRadius:5,padding:"2px 6px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>+ add</div>
+      ) : (
+        <div style={{fontSize:9,color:"rgba(255,255,255,.12)",fontStyle:"italic"}}>—</div>
+      )
+    );
+  }
+
+  const editSlotLabel = editCell ? SLOTS.find(s=>s.key===editCell.slot)?.label : "";
+  const editPersonName = editCell ? (editCell.person==="p1"?person1Name:person2Name) : "";
+
   return (
     <div>
       {/* Header */}
@@ -2023,61 +2052,58 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
         {loading && <span style={{fontSize:11,color:"rgba(125,211,252,.5)"}}>loading…</span>}
       </div>
 
-      {/* Legend */}
-      <div style={{display:"flex",gap:14,marginBottom:12}}>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:8,height:8,borderRadius:"50%",background:p1Color}}/><span style={{fontSize:11,color:"rgba(255,255,255,.5)"}}>{person1Name}</span></div>
-        <div style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:8,height:8,borderRadius:"50%",background:p2Color}}/><span style={{fontSize:11,color:"rgba(255,255,255,.5)"}}>{person2Name}</span></div>
-      </div>
-
       {/* 7-day grid */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8,minWidth:700}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8,minWidth:760}}>
         {weekDays.map((d, i) => {
-          const dayData = days[i] || {p1:[], p2:[]};
+          const dayData = days[i] || {};
           const isToday = d.toDateString() === today;
           return (
-            <div key={i} style={{background:isToday?"rgba(14,165,233,.1)":"rgba(255,255,255,.03)",border:`1px solid ${isToday?"rgba(14,165,233,.35)":"rgba(125,211,252,.1)"}`,borderRadius:10,padding:"10px 8px",minHeight:140}}>
-              <div style={{marginBottom:8}}>
+            <div key={i} style={{background:isToday?"rgba(14,165,233,.08)":"rgba(255,255,255,.03)",border:`1px solid ${isToday?"rgba(14,165,233,.35)":"rgba(125,211,252,.1)"}`,borderRadius:10,padding:"10px 8px"}}>
+              {/* Day header */}
+              <div style={{marginBottom:10}}>
                 <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,color:isToday?"#7DD3FC":"#BAE6FD"}}>{DAY_NAMES[i]}</div>
                 <div style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{d.getDate()}/{d.getMonth()+1}</div>
               </div>
 
-              {/* Person 1 */}
-              <div style={{marginBottom:8}}>
-                <div style={{fontSize:9,color:`${p1Color}88`,marginBottom:3,letterSpacing:".05em"}}>{person1Name}</div>
-                {(dayData.p1||[]).map((m,mi)=>(
-                  <div key={mi} style={{fontSize:10,background:`${p1Color}12`,border:`1px solid ${p1Color}22`,borderRadius:5,padding:"3px 5px",marginBottom:3,display:"flex",gap:3,alignItems:"center"}}>
-                    <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"rgba(255,255,255,.8)"}}>{m.label}</span>
-                    {isOwner && <span onClick={()=>removeMeal(i,"p1",mi)} style={{cursor:"pointer",color:"rgba(248,113,113,.5)",flexShrink:0,lineHeight:1}}>×</span>}
+              {/* Meal rows */}
+              {SLOTS.map(slot => (
+                <div key={slot.key} style={{marginBottom:8}}>
+                  <div style={{fontSize:8,color:"rgba(255,255,255,.25)",letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>{slot.label}</div>
+                  <div style={{marginBottom:3}}>
+                    <div style={{fontSize:8,color:`${p1Color}60`,marginBottom:2}}>{person1Name}</div>
+                    <MealSlot
+                      meal={dayData.p1?.[slot.key]}
+                      color={p1Color}
+                      onClick={()=>openEdit(i,"p1",slot.key)}
+                      onClear={()=>clearSlot(i,"p1",slot.key)}
+                    />
                   </div>
-                ))}
-                {isOwner && <button onClick={()=>openAdd(i,"p1")} style={{fontSize:9,color:`${p1Color}55`,background:"none",border:`1px dashed ${p1Color}30`,borderRadius:5,padding:"2px 6px",cursor:"pointer",width:"100%",fontFamily:"inherit"}}>+ add</button>}
-              </div>
-
-              {/* Divider */}
-              <div style={{height:1,background:"rgba(255,255,255,.06)",marginBottom:8}}/>
-
-              {/* Person 2 */}
-              <div>
-                <div style={{fontSize:9,color:`${p2Color}88`,marginBottom:3,letterSpacing:".05em"}}>{person2Name}</div>
-                {(dayData.p2||[]).map((m,mi)=>(
-                  <div key={mi} style={{fontSize:10,background:`${p2Color}12`,border:`1px solid ${p2Color}22`,borderRadius:5,padding:"3px 5px",marginBottom:3,display:"flex",gap:3,alignItems:"center"}}>
-                    <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"rgba(255,255,255,.8)"}}>{m.label}</span>
-                    {isOwner && <span onClick={()=>removeMeal(i,"p2",mi)} style={{cursor:"pointer",color:"rgba(248,113,113,.5)",flexShrink:0,lineHeight:1}}>×</span>}
+                  <div>
+                    <div style={{fontSize:8,color:`${p2Color}60`,marginBottom:2}}>{person2Name}</div>
+                    <MealSlot
+                      meal={dayData.p2?.[slot.key]}
+                      color={p2Color}
+                      onClick={()=>openEdit(i,"p2",slot.key)}
+                      onClear={()=>clearSlot(i,"p2",slot.key)}
+                    />
                   </div>
-                ))}
-                {isOwner && <button onClick={()=>openAdd(i,"p2")} style={{fontSize:9,color:`${p2Color}55`,background:"none",border:`1px dashed ${p2Color}30`,borderRadius:5,padding:"2px 6px",cursor:"pointer",width:"100%",fontFamily:"inherit"}}>+ add</button>}
-              </div>
+                  {slot.key !== "d" && <div style={{height:1,background:"rgba(255,255,255,.05)",marginTop:6}}/>}
+                </div>
+              ))}
             </div>
           );
         })}
       </div>
 
-      {/* Add meal modal */}
+      {/* Edit modal */}
       {editCell && (
         <div className="overlay" onClick={()=>setEditCell(null)}>
           <div className="modal" onClick={e=>e.stopPropagation()}>
-            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,marginBottom:14,color:"#BAE6FD"}}>
-              Add meal — {DAY_NAMES[editCell.dayIdx]}, {editCell.person==="p1"?person1Name:person2Name}
+            <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,marginBottom:4,color:"#BAE6FD"}}>
+              {editSlotLabel}
+            </div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginBottom:14}}>
+              {DAY_NAMES[editCell.dayIdx]} · {editPersonName}
             </div>
             <div style={{display:"flex",gap:8,marginBottom:14}}>
               <button className={`btn ${editMode==="text"?"btn-primary":"btn-ghost"}`} style={{flex:1}} onClick={()=>setEditMode("text")}>Free text</button>
@@ -2095,7 +2121,7 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
               </select>
             )}
             <div style={{display:"flex",gap:8,marginTop:14}}>
-              <button className="btn btn-primary" style={{flex:1}} onClick={saveEdit}>Add</button>
+              <button className="btn btn-primary" style={{flex:1}} onClick={saveEdit}>Save</button>
               <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setEditCell(null)}>Cancel</button>
             </div>
           </div>
