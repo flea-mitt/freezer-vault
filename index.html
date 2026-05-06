@@ -457,10 +457,15 @@ function App() {
         const minThresh = Number(it.minBags||1);
         const wasLow = currentPortions <= minThresh;
         const nowAbove = newPortions > minThresh;
+        const nowLow = newPortions <= minThresh && !wasLow;
         const clearTodoist = wasLow && nowAbove && it.todoistAdded ? {todoistAdded:false, todoistTaskId:null} : {};
         if (wasLow && nowAbove) todoistProcessing.current.delete(id);
+        // Fire Todoist in parallel — don't wait for listener round-trip
+        if (nowLow && it.notify && !it.todoistAdded && !todoistProcessing.current.has(id)) {
+          addToTodoist({...it, id});
+        }
         await db.collection("items").doc(id).update({totalPortions:newPortions, bags:newBags, updatedAt:firebase.firestore.FieldValue.serverTimestamp(), ...clearTodoist});
-        await logHistory(delta > 0 ? "portions_added" : "portions_removed", item, {from:currentPortions, to:newPortions});
+        logHistory(delta > 0 ? "portions_added" : "portions_removed", item, {from:currentPortions, to:newPortions});
       }
     } catch(e) {}
     setSyncing(false);
