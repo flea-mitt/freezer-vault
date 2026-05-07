@@ -2104,16 +2104,16 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
           const dayData = days[i] || {};
           const isToday = d.toDateString() === today;
           return (
-            <div key={i} style={{background:isToday?"rgba(14,165,233,.08)":"rgba(255,255,255,.03)",border:`1px solid ${isToday?"rgba(14,165,233,.35)":"rgba(125,211,252,.1)"}`,borderRadius:10,padding:"10px 8px"}}>
-              <div style={{marginBottom:10}}>
-                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:12,color:isToday?"#7DD3FC":"#BAE6FD"}}>{DAY_NAMES[i]}</div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{d.getDate()}/{d.getMonth()+1}</div>
+            <div key={i} style={{background:isToday?"rgba(14,165,233,.13)":"rgba(255,255,255,.06)",border:`1px solid ${isToday?"rgba(14,165,233,.5)":"rgba(125,211,252,.2)"}`,borderRadius:10,padding:"10px 8px"}}>
+              <div style={{marginBottom:10,borderBottom:"1px solid rgba(255,255,255,.08)",paddingBottom:7}}>
+                <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:13,color:isToday?"#7DD3FC":"#E0F2FE"}}>{DAY_NAMES[i]}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,.45)"}}>{d.getDate()}/{d.getMonth()+1}</div>
               </div>
 
               {SLOTS.map(slot => {
                 return (
                   <div key={slot.key} style={{marginBottom:8}}>
-                    <div style={{fontSize:8,color:"rgba(255,255,255,.22)",letterSpacing:".06em",textTransform:"uppercase",marginBottom:4}}>{slot.label}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,.45)",letterSpacing:".06em",textTransform:"uppercase",marginBottom:4,fontWeight:600}}>{slot.label}</div>
                     {["p1","p2"].map(person => {
                       const color = person==="p1" ? p1Color : p2Color;
                       const pName = person==="p1" ? person1Name : person2Name;
@@ -2126,22 +2126,22 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
                       return (
                         <div key={person} style={{marginBottom:4}}>
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:2}}>
-                            <div style={{fontSize:8,color:`${color}55`}}>{pName}</div>
-                            {slotKcal > 0 && <div style={{fontSize:8,color:`${color}70`}}>{slotKcal} kcal</div>}
+                            <div style={{fontSize:9,color,fontWeight:600}}>{pName}</div>
+                            {slotKcal > 0 && <div style={{fontSize:9,color:`${color}cc`}}>{slotKcal} kcal</div>}
                           </div>
                           {mealArr.map((m,mi)=>(
-                            <div key={mi} style={{fontSize:10,background:`${color}10`,border:`1px solid ${color}20`,borderRadius:5,padding:"2px 5px",marginBottom:2,display:"flex",gap:3,alignItems:"center"}}>
-                              <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"rgba(255,255,255,.8)"}}>{m.label}</span>
-                              {isOwner && <span onClick={()=>removeItem(i,person,slot.key,mi)} style={{cursor:"pointer",color:"rgba(248,113,113,.45)",flexShrink:0,lineHeight:1,fontSize:11}}>×</span>}
+                            <div key={mi} style={{fontSize:10,background:`${color}20`,border:`1px solid ${color}40`,borderRadius:5,padding:"3px 6px",marginBottom:2,display:"flex",gap:3,alignItems:"center"}}>
+                              <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:"#E0F2FE"}}>{m.label}</span>
+                              {isOwner && <span onClick={()=>removeItem(i,person,slot.key,mi)} style={{cursor:"pointer",color:"rgba(248,113,113,.6)",flexShrink:0,lineHeight:1,fontSize:11}}>×</span>}
                             </div>
                           ))}
                           {isOwner && (
-                            <div onClick={()=>openAdd(i,person,slot.key)} style={{fontSize:9,color:`${color}38`,border:`1px dashed ${color}22`,borderRadius:5,padding:"1px 5px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>+ add</div>
+                            <div onClick={()=>openAdd(i,person,slot.key)} style={{fontSize:9,color:`${color}70`,border:`1px dashed ${color}40`,borderRadius:5,padding:"2px 5px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>+ add</div>
                           )}
                         </div>
                       );
                     })}
-                    {slot.key !== "s" && <div style={{height:1,background:"rgba(255,255,255,.05)",marginTop:6}}/>}
+                    {slot.key !== "s" && <div style={{height:1,background:"rgba(255,255,255,.08)",marginTop:6}}/>}
                   </div>
                 );
               })}
