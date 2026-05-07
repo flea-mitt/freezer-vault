@@ -2030,7 +2030,6 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   const editPersonName = editCell ? (editCell.person==="p1"?person1Name:person2Name) : "";
 
   // Meal suggestions based on expiry
-  const NEEDS_GRAIN = ["Cooked Meals","Slow Cooker Bags","Sauces","Proteins"];
   const slotForCat = cat => cat==="Soups & Broths"?"l":cat==="Snacks"?"s":"d";
 
   const alreadyPlanned = new Set();
@@ -2038,9 +2037,6 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
     const dd = days[i]||{};
     SLOTS.forEach(sl => ["p1","p2"].forEach(p => normalizeSlot(dd[p]?.[sl.key]).forEach(m => { if(m.itemId) alreadyPlanned.add(m.itemId); })));
   });
-
-  const grainItems = items.filter(it => it.category==="Grains & Carbs" && !alreadyPlanned.has(it.id));
-  const usedGrainIds = new Set();
 
   const expiringCandidates = items
     .filter(it => it.bestBefore && !alreadyPlanned.has(it.id))
@@ -2052,16 +2048,13 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   const suggestions = [];
   for (const item of expiringCandidates) {
     const slot = slotForCat(item.category);
-    const dayIdx = weekDays.findIndex((_,i) => {
+    const dayIdx = weekDays.findIndex((d,i) => {
       const k = `${i}-${slot}`;
-      return !usedSlots.has(k) && normalizeSlot(days[i]?.p1?.[slot]).length===0;
+      return !usedSlots.has(k) && normalizeSlot(days[i]?.p1?.[slot]).length===0 && localDateStr(d)>=todayIso;
     });
     if (dayIdx===-1) continue;
     usedSlots.add(`${dayIdx}-${slot}`);
-    const needsGrain = NEEDS_GRAIN.includes(item.category);
-    const grain = needsGrain ? grainItems.find(g => !usedGrainIds.has(g.id)) : null;
-    if (grain) usedGrainIds.add(grain.id);
-    suggestions.push({item, dayIdx, slot, slotLabel:SLOTS.find(s=>s.key===slot)?.label, grain});
+    suggestions.push({item, dayIdx, slot, slotLabel:SLOTS.find(s=>s.key===slot)?.label});
     if (suggestions.length>=5) break;
   }
 
@@ -2071,9 +2064,7 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
     const day = {...(existing[s.dayIdx]||{})};
     ["p1","p2"].forEach(person => {
       const pd = {...(day[person]||{})};
-      const arr = [...normalizeSlot(pd[s.slot]), {label:s.item.name, itemId:s.item.id}];
-      if (s.grain) arr.push({label:s.grain.name, itemId:s.grain.id});
-      pd[s.slot] = arr;
+      pd[s.slot] = [...normalizeSlot(pd[s.slot]), {label:s.item.name, itemId:s.item.id}];
       day[person] = pd;
     });
     existing[s.dayIdx] = day;
@@ -2142,9 +2133,6 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:12,color:"#E0F2FE",fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.item.name}</div>
-                    {s.grain && (
-                      <div style={{fontSize:10,color:"rgba(52,211,153,.8)",marginTop:1}}>+ {s.grain.name}</div>
-                    )}
                   </div>
                   <div style={{flexShrink:0,fontSize:10,color:urgent?"#FB923C":"rgba(255,255,255,.35)",background:urgent?"rgba(251,146,60,.12)":"rgba(255,255,255,.04)",border:`1px solid ${urgent?"rgba(251,146,60,.3)":"rgba(255,255,255,.08)"}`,borderRadius:6,padding:"2px 7px"}}>
                     {s.item.daysLeft===0?"today":`${s.item.daysLeft}d left`}
