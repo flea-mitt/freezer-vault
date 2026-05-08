@@ -2117,6 +2117,8 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   const p1Color = "#7DD3FC"; const p2Color = "#34D399";
   const editSlotLabel = editCell ? SLOTS.find(s=>s.key===editCell.slot)?.label : "";
   const editPersonName = editCell ? (editCell.person==="p1"?person1Name:person2Name) : "";
+  const localDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const todayIso = localDateStr(new Date());
 
   // Meal suggestions based on expiry
   const slotForCat = cat => cat==="Soups & Broths"?"l":cat==="Snacks"?"s":"d";
@@ -2162,8 +2164,6 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   }
 
   // Build defrost schedule: for each freezer item in the plan, take out 1 day before
-  const localDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const todayIso = localDateStr(new Date());
   const defrostMap = {};
   weekDays.forEach((d, i) => {
     const dayData = days[i] || {};
