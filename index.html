@@ -8,7 +8,6 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -2486,47 +2485,64 @@ function ScanPanel({active, scanMode, setScanMode, scanFreezer, setScanFreezer, 
 
 function LabelsPanel({items, FREEZERS, getZone}) {
   const [filterFreezer, setFilterFreezer] = useState("all");
-  const filtered = filterFreezer==="all" ? items : items.filter(i=>i.freezer===filterFreezer);
+  const [copied, setCopied] = useState(null);
 
-  useEffect(() => {
-    if (!window.JsBarcode) return;
-    filtered.forEach(item => {
-      const el = document.getElementById(`bc-${item.id}`);
-      if (!el) return;
-      try { JsBarcode(el, `FV:${item.id}`, {format:"CODE128",width:1.5,height:32,displayValue:false,margin:2}); }
-      catch(e) {}
-    });
-  });
+  const filtered = (filterFreezer==="all" ? items : items.filter(i=>i.freezer===filterFreezer))
+    .slice().sort((a,b)=>a.name.localeCompare(b.name));
+
+  function copyCode(code, id) {
+    navigator.clipboard?.writeText(code).catch(()=>{});
+    setCopied(id); setTimeout(()=>setCopied(null), 1500);
+  }
+
+  function copyAll() {
+    const text = filtered.map(it=>`${it.name}\tFV:${it.id}`).join("\n");
+    navigator.clipboard?.writeText(text).catch(()=>{});
+    setCopied("all"); setTimeout(()=>setCopied(null), 1500);
+  }
 
   return (
-    <div>
-      <div className="no-print" style={{display:"flex",gap:8,marginBottom:16,alignItems:"center",flexWrap:"wrap"}}>
+    <div style={{maxWidth:700}}>
+      <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
         <select className="inp" value={filterFreezer} onChange={e=>setFilterFreezer(e.target.value)} style={{width:170}}>
           <option value="all">All freezers</option>
           {Object.values(FREEZERS).map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
         </select>
         <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>{filtered.length} items</span>
-        <button className="btn btn-ghost" style={{marginLeft:"auto"}} onClick={()=>window.print()}>🖨 Print labels</button>
+        <button className="btn btn-ghost" style={{marginLeft:"auto",fontSize:11}} onClick={copyAll}>
+          {copied==="all" ? "✓ Copied" : "Copy all codes"}
+        </button>
       </div>
 
-      <div className="no-print" style={{fontSize:11,color:"rgba(255,255,255,.35)",marginBottom:12}}>
-        Each label uses a <strong style={{color:"#7DD3FC"}}>FV:</strong> barcode. For shop-bought items, the shop barcode is also shown. Set a shop barcode on any item via Edit → Shop Barcode.
+      <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:14,lineHeight:1.6}}>
+        Enter the <span style={{color:"#7DD3FC",fontFamily:"monospace"}}>FV:…</span> code into your Niimbot app as the barcode value. Shop-bought items with a barcode stored will show that too.
       </div>
 
-      <div className="label-grid" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
+      <div style={{display:"flex",flexDirection:"column",gap:4}}>
         {filtered.map(item => {
           const zone = getZone(item.freezer, item.zone);
           const fz   = FREEZERS[item.freezer];
+          const fvCode = `FV:${item.id}`;
           return (
-            <div key={item.id} className="label-card" style={{background:"#fff",color:"#000",borderRadius:8,padding:"8px",border:"1px solid rgba(255,255,255,.15)",textAlign:"center"}}>
-              <div className="lname" style={{fontSize:11,fontWeight:700,fontFamily:"sans-serif",marginBottom:3,lineHeight:1.2,color:"#000"}}>{item.name}</div>
-              <div className="lloc" style={{fontSize:9,color:"#555",fontFamily:"sans-serif",marginBottom:4}}>{fz?.label} · {zone?.label}</div>
-              <svg id={`bc-${item.id}`} style={{width:"100%",maxWidth:140,display:"block",margin:"0 auto"}}/>
-              {item.barcode && (
-                <div style={{fontSize:8,color:"#777",fontFamily:"monospace",marginTop:3,borderTop:"1px solid #eee",paddingTop:3}}>
-                  {item.barcode}
+            <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",borderRadius:9}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:"#E0F2FE",fontWeight:500}}>{item.name}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginTop:2}}>{fz?.icon} {fz?.label} · {zone?.label} · {item.category}</div>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontFamily:"monospace",fontSize:11,color:"#7DD3FC",letterSpacing:".04em"}}>{fvCode}</span>
+                  <button className="btn btn-ghost" style={{padding:"2px 8px",fontSize:10}} onClick={()=>copyCode(fvCode, item.id)}>
+                    {copied===item.id ? "✓" : "copy"}
+                  </button>
                 </div>
-              )}
+                {item.barcode && (
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontFamily:"monospace",fontSize:10,color:"rgba(255,255,255,.4)"}}>{item.barcode}</span>
+                    <span style={{fontSize:9,color:"rgba(255,255,255,.25)",background:"rgba(255,255,255,.06)",borderRadius:4,padding:"1px 5px"}}>shop</span>
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}
