@@ -2658,116 +2658,135 @@ function BarcodeImg({value}) {
 
 function LabelsPanel({items, FREEZERS, getZone, db}) {
   const [filterFreezer, setFilterFreezer] = useState("all");
-  const [copied, setCopied] = useState(null);
-  const [generating, setGenerating] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [editingVal, setEditingVal] = useState("");
-
-  function startEdit(item) {
-    setEditingId(item.id);
-    setEditingVal(item.labelCode || itemLabelCode(item.id));
-  }
-
-  async function saveEdit(item) {
-    const val = editingVal.trim().replace(/\D/g,"").slice(0,6);
-    if (val.length === 6) {
-      await db.collection("items").doc(item.id).update({labelCode: val});
-    }
-    setEditingId(null);
-  }
-
-  function resetCode(item) {
-    const code = itemLabelCode(item.id);
-    db.collection("items").doc(item.id).update({labelCode: code});
-    setEditingId(null);
-  }
+  const [copied,        setCopied]        = useState(null);
+  const [generating,    setGenerating]    = useState(false);
+  const [editingCode,   setEditingCode]   = useState(null); // the group code being edited
+  const [editingVal,    setEditingVal]    = useState("");
 
   async function generateMissingCodes() {
     setGenerating(true);
-    const missing = items.filter(i => !i.labelCode);
-    for (const item of missing) {
+    for (const item of items.filter(i => !i.labelCode))
       await db.collection("items").doc(item.id).update({labelCode: itemLabelCode(item.id)});
-    }
     setGenerating(false);
   }
 
-  const missingCount = items.filter(i => !i.labelCode).length;
+  // Group all items by effective label code
+  const codeMap = {};
+  items.forEach(it => {
+    const code = it.labelCode || itemLabelCode(it.id);
+    (codeMap[code] = codeMap[code] || []).push(it);
+  });
 
-  const filtered = (filterFreezer==="all" ? items : items.filter(i=>i.freezer===filterFreezer))
-    .slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const allGroups = Object.entries(codeMap)
+    .map(([code, grpItems]) => ({code, items: grpItems, name: grpItems[0].name}))
+    .sort((a,b) => a.name.localeCompare(b.name));
 
-  function copyCode(code, id) {
+  const groups = filterFreezer === "all"
+    ? allGroups
+    : allGroups.filter(g => g.items.some(i => i.freezer === filterFreezer));
+
+  function copyCode(code) {
     navigator.clipboard?.writeText(code).catch(()=>{});
-    setCopied(id); setTimeout(()=>setCopied(null), 1500);
+    setCopied(code); setTimeout(()=>setCopied(null), 1500);
   }
 
   function copyAll() {
-    const text = filtered.map(it=>`${it.name}\t${it.labelCode||itemLabelCode(it.id)}`).join("\n");
+    const text = groups.map(g=>`${g.name}\t${g.code}`).join("\n");
     navigator.clipboard?.writeText(text).catch(()=>{});
     setCopied("all"); setTimeout(()=>setCopied(null), 1500);
   }
 
+  async function saveEdit(group) {
+    const val = editingVal.trim().replace(/\D/g,"").slice(0,6);
+    if (val.length === 6) {
+      for (const item of group.items)
+        await db.collection("items").doc(item.id).update({labelCode: val});
+    }
+    setEditingCode(null);
+  }
+
+  async function resetGroup(group) {
+    for (const item of group.items)
+      await db.collection("items").doc(item.id).update({labelCode: itemLabelCode(item.id)});
+    setEditingCode(null);
+  }
+
+  const missingCount = items.filter(i => !i.labelCode).length;
+  const isLinked = g => g.items.length > 1;
+
   return (
-    <div style={{maxWidth:700}}>
+    <div style={{maxWidth:720}}>
       <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center",flexWrap:"wrap"}}>
         <select className="inp" value={filterFreezer} onChange={e=>setFilterFreezer(e.target.value)} style={{width:170}}>
           <option value="all">All freezers</option>
           {Object.values(FREEZERS).map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
         </select>
-        <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>{filtered.length} items</span>
+        <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>{groups.length} label{groups.length!==1?"s":""}</span>
         {missingCount > 0 && (
           <button className="btn btn-ghost" style={{fontSize:11}} onClick={generateMissingCodes} disabled={generating}>
-            {generating ? "…" : `Generate codes for ${missingCount} items`}
+            {generating?"…":`Generate codes for ${missingCount} items`}
           </button>
         )}
         <button className="btn btn-ghost" style={{marginLeft:"auto",fontSize:11}} onClick={copyAll}>
-          {copied==="all" ? "✓ Copied" : "Copy all codes"}
+          {copied==="all"?"✓ Copied":"Copy all codes"}
         </button>
       </div>
 
-      <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:14,lineHeight:1.6}}>
-        Use <span style={{color:"#7DD3FC"}}>Code128</span> format in Niimbot and enter the 6-digit code. Code128 auto-selects the most compact encoding for digits.
+      <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:14}}>
+        Use <span style={{color:"#7DD3FC"}}>Code128</span> in Niimbot. Items sharing a barcode are shown once.
       </div>
 
-      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-        {filtered.map(item => {
-          const zone = getZone(item.freezer, item.zone);
-          const fz   = FREEZERS[item.freezer];
-          return (
-            <div key={item.id} style={{display:"flex",alignItems:"center",gap:14,padding:"10px 14px",background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",borderRadius:9}}>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,color:"#E0F2FE",fontWeight:500}}>{item.name}</div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginTop:2}}>{fz?.icon} {fz?.label} · {zone?.label} · {item.category}</div>
-                {item.barcode && (
-                  <div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginTop:2,fontFamily:"monospace"}}>shop: {item.barcode}</div>
-                )}
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {groups.map(g => (
+          <div key={g.code} style={{display:"flex",alignItems:"center",gap:14,padding:"10px 14px",
+            background: isLinked(g)?"rgba(52,211,153,.06)":"rgba(255,255,255,.04)",
+            border:`1px solid ${isLinked(g)?"rgba(52,211,153,.2)":"rgba(125,211,252,.1)"}`,borderRadius:9}}>
+
+            {/* Info */}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <span style={{fontSize:13,color:"#E0F2FE",fontWeight:500}}>{g.name}</span>
+                {isLinked(g) && <span style={{fontSize:9,color:"rgba(52,211,153,.7)",background:"rgba(52,211,153,.1)",borderRadius:4,padding:"1px 6px"}}>⛓ linked</span>}
               </div>
-              <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-                <div style={{background:"#fff",borderRadius:6,padding:"4px 6px",width:160}}>
-                  <BarcodeImg value={item.labelCode||itemLabelCode(item.id)}/>
-                </div>
-                {editingId===item.id ? (
-                  <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                    <input className="inp" value={editingVal} autoFocus
-                      onChange={e=>setEditingVal(e.target.value.replace(/\D/g,"").slice(0,6))}
-                      onKeyDown={e=>{if(e.key==="Enter")saveEdit(item);if(e.key==="Escape")setEditingId(null);}}
-                      style={{width:80,fontFamily:"monospace",fontSize:13,letterSpacing:".1em",padding:"3px 6px",textAlign:"center"}}/>
-                    <button className="btn btn-primary" style={{padding:"2px 8px",fontSize:10}} onClick={()=>saveEdit(item)}>✓</button>
-                    <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}} onClick={()=>setEditingId(null)}>✕</button>
+              {g.items.map(it=>{
+                const zone=getZone(it.freezer,it.zone); const fz=FREEZERS[it.freezer];
+                return (
+                  <div key={it.id} style={{fontSize:10,color:"rgba(255,255,255,.4)",marginBottom:1}}>
+                    {fz?.icon} {fz?.label} · {zone?.label}
+                    {isLinked(g) && it.name!==g.name && <span style={{color:"rgba(255,255,255,.25)",marginLeft:4}}>({it.name})</span>}
                   </div>
-                ) : (
-                  <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",justifyContent:"center"}}>
-                    <span style={{fontFamily:"monospace",fontSize:13,color:"rgba(255,255,255,.5)",letterSpacing:".1em"}}>{item.labelCode||itemLabelCode(item.id)}</span>
-                    {item.labelCode && <span style={{fontSize:9,color:"rgba(52,211,153,.7)",background:"rgba(52,211,153,.1)",borderRadius:4,padding:"1px 5px"}}>linked</span>}
-                    <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}} onClick={()=>startEdit(item)}>✎</button>
-                    <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}} onClick={()=>copyCode(item.labelCode||itemLabelCode(item.id),item.id)}>{copied===item.id?"✓":"copy"}</button>
-                    {item.labelCode && item.labelCode!==itemLabelCode(item.id) && <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:9}} onClick={()=>resetCode(item)}>reset</button>}
-                  </div>
-                )}
-              </div>
+                );
+              })}
             </div>
-          );
-        })}
+
+            {/* Barcode */}
+            <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+              <div style={{background:"#fff",borderRadius:6,padding:"4px 6px",width:160}}>
+                <BarcodeImg value={g.code}/>
+              </div>
+              {editingCode===g.code ? (
+                <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                  <input className="inp" value={editingVal} autoFocus
+                    onChange={e=>setEditingVal(e.target.value.replace(/\D/g,"").slice(0,6))}
+                    onKeyDown={e=>{if(e.key==="Enter")saveEdit(g);if(e.key==="Escape")setEditingCode(null);}}
+                    style={{width:80,fontFamily:"monospace",fontSize:13,letterSpacing:".1em",padding:"3px 6px",textAlign:"center"}}/>
+                  <button className="btn btn-primary" style={{padding:"2px 8px",fontSize:10}} onClick={()=>saveEdit(g)}>✓</button>
+                  <button className="btn btn-ghost"   style={{padding:"2px 6px",fontSize:10}} onClick={()=>setEditingCode(null)}>✕</button>
+                </div>
+              ) : (
+                <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",justifyContent:"center"}}>
+                  <span style={{fontFamily:"monospace",fontSize:13,color:"rgba(255,255,255,.5)",letterSpacing:".1em"}}>{g.code}</span>
+                  <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}}
+                    onClick={()=>{setEditingCode(g.code);setEditingVal(g.code);}}>✎</button>
+                  <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}}
+                    onClick={()=>copyCode(g.code)}>{copied===g.code?"✓":"copy"}</button>
+                  {isLinked(g) && <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:9}}
+                    onClick={()=>resetGroup(g)}>unlink</button>}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
