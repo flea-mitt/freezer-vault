@@ -1367,7 +1367,7 @@ function OverviewPanel({items,allExpiring,totalPortions,lowStock,expiryInfo,getZ
     const seen = new Set();
     let typeCount = 0;
     for (const item of catItems) {
-      const key = item.group ? `g:${item.group}` : (item.labelCode && sharedLCsLocal.has(item.labelCode) ? `lc:${item.labelCode}` : item.id);
+      const key = (item.labelCode && sharedLCsLocal.has(item.labelCode)) ? `lc:${item.labelCode}` : (item.group ? `g:${item.group}` : item.id);
       if (seen.has(key)) continue;
       seen.add(key);
       typeCount++;
@@ -1475,20 +1475,21 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
     const entries = [];
     for (const item of catItems) {
       let key, entry;
-      if (item.group) {
+      if (item.labelCode && sharedLCs.has(item.labelCode)) {
+        key = `lc:${item.labelCode}`;
+        if (seen.has(key)) continue;
+        const linked = lcMap[item.labelCode];
+        const totalBags = linked.reduce((s,i) => s+(i.bags||1), 0);
+        const totalPortions = linked.reduce((s,i) => s+(Number(i.bags||1)*Number(i.qty)), 0);
+        const groupName = linked.find(i => i.group)?.group;
+        entry = { key, badge: groupName ? "group · linked" : "linked", name: groupName || item.name, totalBags, totalPortions, items:linked };
+      } else if (item.group) {
         key = `g:${item.group}`;
         if (seen.has(key)) continue;
         const allGrouped = items.filter(i => i.group === item.group);
         const totalBags = allGrouped.reduce((s,i) => s+(i.bags||1), 0);
         const totalPortions = allGrouped.reduce((s,i) => s+(Number(i.bags||1)*Number(i.qty)), 0);
         entry = { key, badge:"group", name:item.group, totalBags, totalPortions, items:allGrouped };
-      } else if (item.labelCode && sharedLCs.has(item.labelCode)) {
-        key = `lc:${item.labelCode}`;
-        if (seen.has(key)) continue;
-        const linked = lcMap[item.labelCode];
-        const totalBags = linked.reduce((s,i) => s+(i.bags||1), 0);
-        const totalPortions = linked.reduce((s,i) => s+(Number(i.bags||1)*Number(i.qty)), 0);
-        entry = { key, badge:"linked", name:item.name, totalBags, totalPortions, items:linked };
       } else {
         key = item.id;
         if (seen.has(key)) continue;
