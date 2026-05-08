@@ -305,6 +305,7 @@ function App() {
   const [person1Name,      setPerson1Name]      = useState("Tal");
   const [person2Name,      setPerson2Name]      = useState("Kara");
   const [addToMealTarget,  setAddToMealTarget]  = useState(null);
+  const [mergeSource,      setMergeSource]      = useState(null);
   const [scanMode,         setScanMode]         = useState("OUT");
   const [scanFreezer,      setScanFreezer]       = useState("chest");
   const [scanZone,         setScanZone]          = useState("basket");
@@ -355,13 +356,21 @@ function App() {
     return it.totalPortions != null ? Number(it.totalPortions) : (Number(it.bags||1)*qty);
   }
 
+  async function linkBarcodes(itemA, itemB) {
+    const sharedCode = itemLabelCode(itemA.id);
+    await db.collection("items").doc(itemA.id).update({labelCode: sharedCode, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+    await db.collection("items").doc(itemB.id).update({labelCode: sharedCode, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+  }
+
   async function handleBarcode(code) {
     const trimmed = (code||"").trim();
     if (!trimmed) return;
     const isFV = trimmed.startsWith("FV:");
+    const matchCode = i => (i.labelCode || itemLabelCode(i.id)) === trimmed;
     const item = isFV
       ? items.find(i => i.id === trimmed.slice(3))
-      : items.find(i => itemLabelCode(i.id) === trimmed)
+      : items.find(i => matchCode(i) && i.freezer === scanFreezer)
+        || items.find(i => matchCode(i))
         || items.find(i => i.barcode && i.barcode === trimmed);
     if (item) {
       if (scanMode === "OUT") {
@@ -475,13 +484,16 @@ function App() {
         updatedAt:firebase.firestore.FieldValue.serverTimestamp()
       };
       if (editId) {
+        payload.labelCode = form.labelCode || itemLabelCode(editId);
         await db.collection("items").doc(editId).update(payload);
         await logHistory("edited", payload, {itemId:editId, changes: JSON.stringify(payload)});
       } else {
+        const ref = db.collection("items").doc();
+        payload.labelCode = itemLabelCode(ref.id);
         payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
         payload.addedBy = authUser?.displayName || "Unknown";
         payload.addedByEmail = authUser?.email || "";
-        const ref = await db.collection("items").add(payload);
+        await ref.set(payload);
         await logHistory("added", payload, {itemId:ref.id});
       }
     } catch(e) { alert("Save failed: " + e.message); }
@@ -883,7 +895,7 @@ function App() {
         )}
 
         {activeFreezer==="labels" && (
-          <LabelsPanel items={items} FREEZERS={FREEZERS} getZone={getZone}/>
+          <LabelsPanel items={items} FREEZERS={FREEZERS} getZone={getZone} db={db}/>
         )}
 
         {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && activeFreezer!=="mealplan" && activeFreezer!=="labels" && view==="map" && (
@@ -917,7 +929,7 @@ function App() {
                   {panelItems.length===0
                     ? <div style={{textAlign:"center",padding:"36px 0",color:"rgba(255,255,255,.18)",fontSize:12,fontStyle:"italic"}}>Empty</div>
                     : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                        {panelItems.map(it=><ItemCard key={it.id} item={it} zone={panelZone} kiosk={kiosk} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)} onMove={(p,f,z)=>moveItem(it.id,it,p,f,z)}/>)}
+                        {panelItems.map(it=><ItemCard key={it.id} item={it} zone={panelZone} kiosk={kiosk} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)} onMove={(p,f,z)=>moveItem(it.id,it,p,f,z)} onMerge={isOwner?it=>setMergeSource(it):null}/>)}
                       </div>}
                 </>
               ) : (
@@ -944,7 +956,7 @@ function App() {
                   {zi.length===0
                     ? <div style={{fontSize:11,color:"rgba(255,255,255,.16)",fontStyle:"italic",paddingLeft:18}}>Empty</div>
                     : <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                        {zi.map(it=><ItemCard key={it.id} item={it} zone={zone} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)} onMove={(p,f,z)=>moveItem(it.id,it,p,f,z)}/>)}
+                        {zi.map(it=><ItemCard key={it.id} item={it} zone={zone} isGreen={activeFreezer==="indoor"} isOwner={isOwner} onEdit={()=>openEdit(it)} onDel={()=>del(it.id)} onAdj={d=>adj(it.id,d,it)} onMove={(p,f,z)=>moveItem(it.id,it,p,f,z)} onMerge={isOwner?it=>setMergeSource(it):null}/>)}
                       </div>}
                 </div>
               );
@@ -1142,6 +1154,12 @@ function App() {
         <AddToMealModal db={db} item={addToMealTarget} person1Name={person1Name} person2Name={person2Name} onClose={()=>setAddToMealTarget(null)}/>
       )}
 
+      {mergeSource && (
+        <MergeModal source={mergeSource} allItems={items} FREEZERS={FREEZERS} getZone={getZone}
+          onConfirm={(a,b)=>{linkBarcodes(a,b);setMergeSource(null);}}
+          onClose={()=>setMergeSource(null)}/>
+      )}
+
       {kiosk && (
         <ScanPanel
           active={!showForm}
@@ -1212,7 +1230,7 @@ function ZCell({zone,count,active,onClick,exp,kiosk,isGreen}) {
   );
 }
 
-function ItemCard({item,zone,onEdit,onDel,onAdj,onMove,kiosk,isGreen,isOwner}) {
+function ItemCard({item,zone,onEdit,onDel,onAdj,onMove,onMerge,kiosk,isGreen,isOwner}) {
   const [hover,setHover]=useState(false);
   const ei=expiryInfo(item.bestBefore);
   const qty=Math.max(1,Number(item.qty)||1);
@@ -1281,6 +1299,7 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,onMove,kiosk,isGreen,isOwner}) {
             {hover && (
               <div style={{display:"flex",gap:4}}>
                 <button className="btn btn-ghost" style={{padding:"3px 8px",fontSize:10}} onClick={()=>{setMovePortions(totalPortions);setShowMove(s=>!s);}}>↗ move</button>
+                {onMerge && <button className="btn btn-ghost" style={{padding:"3px 8px",fontSize:10}} onClick={()=>onMerge(item)}>⇌ merge</button>}
                 <button className="btn btn-ghost" style={{padding:"3px 8px",fontSize:10}} onClick={onEdit}>edit</button>
                 <button className="btn btn-danger" style={{padding:"3px 8px",fontSize:10}} onClick={onDel}>×</button>
               </div>
@@ -2404,6 +2423,68 @@ function AddToMealModal({db, item, person1Name, person2Name, onClose}) {
   );
 }
 
+function MergeModal({source, allItems, FREEZERS, getZone, onConfirm, onClose}) {
+  const [search, setSearch] = useState("");
+  const [target, setTarget] = useState(null);
+
+  const candidates = allItems
+    .filter(i => i.id !== source.id)
+    .filter(i => !search.trim() || i.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a,b) => a.name.localeCompare(b.name));
+
+  const sharedCode = source.labelCode || itemLabelCode(source.id);
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" style={{maxWidth:480}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:15,marginBottom:4,color:"#BAE6FD"}}>Link barcodes</div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginBottom:16}}>
+          Both items keep their own stock in their own freezer. They'll share one barcode label — scanning it in kiosk mode will target whichever freezer you have selected.
+        </div>
+
+        <div style={{background:"rgba(125,211,252,.08)",border:"1px solid rgba(125,211,252,.2)",borderRadius:9,padding:"10px 12px",marginBottom:12}}>
+          <div style={{fontSize:10,color:"rgba(125,211,252,.6)",marginBottom:4}}>Linking from</div>
+          <div style={{fontSize:13,color:"#E0F2FE",fontWeight:500}}>{source.name}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,.4)",marginTop:2}}>
+            {FREEZERS[source.freezer]?.icon} {getZone(source.freezer,source.zone)?.label} · code {sharedCode}
+          </div>
+        </div>
+
+        <input className="inp" placeholder="Search for item to link with…" value={search}
+          onChange={e=>{setSearch(e.target.value);setTarget(null);}} style={{marginBottom:8}} autoFocus/>
+
+        <div style={{maxHeight:220,overflowY:"auto",display:"flex",flexDirection:"column",gap:4,marginBottom:14}}>
+          {candidates.length===0 && <div style={{fontSize:12,color:"rgba(255,255,255,.25)",padding:"12px 0",textAlign:"center"}}>No items found</div>}
+          {candidates.map(it => {
+            const sel = target?.id===it.id;
+            return (
+              <div key={it.id} onClick={()=>setTarget(it)} style={{padding:"8px 12px",borderRadius:8,cursor:"pointer",
+                background:sel?"rgba(125,211,252,.12)":"rgba(255,255,255,.03)",
+                border:`1px solid ${sel?"rgba(125,211,252,.35)":"rgba(125,211,252,.08)"}`}}>
+                <div style={{fontSize:12,color:"#E0F2FE",fontWeight:sel?600:400}}>{it.name}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,.4)",marginTop:1}}>
+                  {FREEZERS[it.freezer]?.icon} {getZone(it.freezer,it.zone)?.label} · {it.category}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {target && (
+          <div style={{background:"rgba(52,211,153,.07)",border:"1px solid rgba(52,211,153,.2)",borderRadius:9,padding:"10px 12px",marginBottom:14,fontSize:11,color:"rgba(255,255,255,.6)"}}>
+            Both <strong style={{color:"#E0F2FE"}}>{source.name}</strong> and <strong style={{color:"#E0F2FE"}}>{target.name}</strong> will share barcode <span style={{fontFamily:"monospace",color:"#7DD3FC"}}>{sharedCode}</span>. Nothing is deleted.
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-primary" style={{flex:1}} onClick={()=>target&&onConfirm(source,target)} disabled={!target}>Link barcodes</button>
+          <button className="btn btn-ghost" style={{flex:1}} onClick={onClose}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ScanPanel({active, scanMode, setScanMode, scanFreezer, setScanFreezer, scanZone, setScanZone, scanMsg, onBarcode, FREEZERS}) {
   const scannerRef = useRef(null);
   const lastScan   = useRef(null);
@@ -2506,9 +2587,21 @@ function BarcodeImg({value}) {
   return <svg ref={ref} style={{display:"block",width:"100%"}}/>;
 }
 
-function LabelsPanel({items, FREEZERS, getZone}) {
+function LabelsPanel({items, FREEZERS, getZone, db}) {
   const [filterFreezer, setFilterFreezer] = useState("all");
   const [copied, setCopied] = useState(null);
+  const [generating, setGenerating] = useState(false);
+
+  async function generateMissingCodes() {
+    setGenerating(true);
+    const missing = items.filter(i => !i.labelCode);
+    for (const item of missing) {
+      await db.collection("items").doc(item.id).update({labelCode: itemLabelCode(item.id)});
+    }
+    setGenerating(false);
+  }
+
+  const missingCount = items.filter(i => !i.labelCode).length;
 
   const filtered = (filterFreezer==="all" ? items : items.filter(i=>i.freezer===filterFreezer))
     .slice().sort((a,b)=>a.name.localeCompare(b.name));
@@ -2519,7 +2612,7 @@ function LabelsPanel({items, FREEZERS, getZone}) {
   }
 
   function copyAll() {
-    const text = filtered.map(it=>`${it.name}\t${itemLabelCode(it.id)}`).join("\n");
+    const text = filtered.map(it=>`${it.name}\t${it.labelCode||itemLabelCode(it.id)}`).join("\n");
     navigator.clipboard?.writeText(text).catch(()=>{});
     setCopied("all"); setTimeout(()=>setCopied(null), 1500);
   }
@@ -2532,6 +2625,11 @@ function LabelsPanel({items, FREEZERS, getZone}) {
           {Object.values(FREEZERS).map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
         </select>
         <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>{filtered.length} items</span>
+        {missingCount > 0 && (
+          <button className="btn btn-ghost" style={{fontSize:11}} onClick={generateMissingCodes} disabled={generating}>
+            {generating ? "…" : `Generate codes for ${missingCount} items`}
+          </button>
+        )}
         <button className="btn btn-ghost" style={{marginLeft:"auto",fontSize:11}} onClick={copyAll}>
           {copied==="all" ? "✓ Copied" : "Copy all codes"}
         </button>
@@ -2556,11 +2654,12 @@ function LabelsPanel({items, FREEZERS, getZone}) {
               </div>
               <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
                 <div style={{background:"#fff",borderRadius:6,padding:"4px 6px",width:160}}>
-                  <BarcodeImg value={itemLabelCode(item.id)}/>
+                  <BarcodeImg value={item.labelCode||itemLabelCode(item.id)}/>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontFamily:"monospace",fontSize:11,color:"rgba(255,255,255,.4)"}}>{itemLabelCode(item.id)}</span>
-                  <button className="btn btn-ghost" style={{padding:"2px 8px",fontSize:10}} onClick={()=>copyCode(itemLabelCode(item.id), item.id)}>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",justifyContent:"center"}}>
+                  <span style={{fontFamily:"monospace",fontSize:11,color:"rgba(255,255,255,.4)"}}>{item.labelCode||itemLabelCode(item.id)}</span>
+                  {item.labelCode && <span style={{fontSize:9,color:"rgba(52,211,153,.7)",background:"rgba(52,211,153,.1)",borderRadius:4,padding:"1px 5px"}}>linked</span>}
+                  <button className="btn btn-ghost" style={{padding:"2px 8px",fontSize:10}} onClick={()=>copyCode(item.labelCode||itemLabelCode(item.id), item.id)}>
                     {copied===item.id ? "✓" : "copy"}
                   </button>
                 </div>
