@@ -944,7 +944,7 @@ function App() {
         )}
 
         {activeFreezer==="labels" && (
-          <LabelsPanel items={items} FREEZERS={FREEZERS} getZone={getZone} db={db}/>
+          <LabelsPanel items={items} FREEZERS={FREEZERS} getZone={getZone} db={db} isOwner={isOwner}/>
         )}
 
         {activeFreezer!=="overview" && activeFreezer!=="priority" && activeFreezer!=="stockwatch" && activeFreezer!=="history" && activeFreezer!=="admin" && activeFreezer!=="mealplan" && activeFreezer!=="labels" && view==="map" && (
@@ -2321,9 +2321,9 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
                   <div style={{flexShrink:0,fontSize:10,color:urgent?"#FB923C":"rgba(255,255,255,.35)",background:urgent?"rgba(251,146,60,.12)":"rgba(255,255,255,.04)",border:`1px solid ${urgent?"rgba(251,146,60,.3)":"rgba(255,255,255,.08)"}`,borderRadius:6,padding:"2px 7px"}}>
                     {s.item.daysLeft===0?"today":`${s.item.daysLeft}d left`}
                   </div>
-                  <button className="btn btn-ghost" style={{fontSize:10,padding:"3px 10px",flexShrink:0,color:"#34D399",borderColor:"rgba(52,211,153,.3)"}} onClick={()=>addSuggestion(s)}>
+                  {isOwner && <button className="btn btn-ghost" style={{fontSize:10,padding:"3px 10px",flexShrink:0,color:"#34D399",borderColor:"rgba(52,211,153,.3)"}} onClick={()=>addSuggestion(s)}>
                     Add
-                  </button>
+                  </button>}
                 </div>
               );
             })}
@@ -2673,7 +2673,7 @@ function BarcodeImg({value}) {
   return <svg ref={ref} style={{display:"block",width:"100%"}}/>;
 }
 
-function LabelsPanel({items, FREEZERS, getZone, db}) {
+function LabelsPanel({items, FREEZERS, getZone, db, isOwner}) {
   const [filterFreezer, setFilterFreezer] = useState("all");
   const [copied,        setCopied]        = useState(null);
   const [generating,    setGenerating]    = useState(false);
@@ -2739,7 +2739,7 @@ function LabelsPanel({items, FREEZERS, getZone, db}) {
           {Object.values(FREEZERS).map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
         </select>
         <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>{groups.length} label{groups.length!==1?"s":""}</span>
-        {missingCount > 0 && (
+        {isOwner && missingCount > 0 && (
           <button className="btn btn-ghost" style={{fontSize:11}} onClick={generateMissingCodes} disabled={generating}>
             {generating?"…":`Generate codes for ${missingCount} items`}
           </button>
@@ -2781,7 +2781,7 @@ function LabelsPanel({items, FREEZERS, getZone, db}) {
               <div style={{background:"#fff",borderRadius:6,padding:"4px 6px",width:160}}>
                 <BarcodeImg value={g.code}/>
               </div>
-              {editingCode===g.code ? (
+              {isOwner && editingCode===g.code ? (
                 <div style={{display:"flex",gap:4,alignItems:"center"}}>
                   <input className="inp" value={editingVal} autoFocus
                     onChange={e=>setEditingVal(e.target.value.replace(/\D/g,"").slice(0,6))}
@@ -2793,11 +2793,11 @@ function LabelsPanel({items, FREEZERS, getZone, db}) {
               ) : (
                 <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",justifyContent:"center"}}>
                   <span style={{fontFamily:"monospace",fontSize:13,color:"rgba(255,255,255,.5)",letterSpacing:".1em"}}>{g.code}</span>
-                  <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}}
-                    onClick={()=>{setEditingCode(g.code);setEditingVal(g.code);}}>✎</button>
+                  {isOwner && <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}}
+                    onClick={()=>{setEditingCode(g.code);setEditingVal(g.code);}}>✎</button>}
                   <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}}
                     onClick={()=>copyCode(g.code)}>{copied===g.code?"✓":"copy"}</button>
-                  {isLinked(g) && <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:9}}
+                  {isOwner && isLinked(g) && <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:9}}
                     onClick={()=>resetGroup(g)}>unlink</button>}
                 </div>
               )}
