@@ -1318,7 +1318,8 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,onMove,onMerge,kiosk,isGreen,isO
           <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginBottom:6}}>Move portions to another freezer</div>
           <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
             <input type="number" className="inp" min={1} max={totalPortions} value={movePortions}
-              onChange={e=>setMovePortions(Math.min(totalPortions,Math.max(1,Number(e.target.value)||1)))}
+              onChange={e=>setMovePortions(e.target.value)}
+              onBlur={e=>setMovePortions(Math.min(totalPortions,Math.max(1,Number(e.target.value)||1)))}
               style={{width:55,padding:"4px 8px",fontSize:12}}/>
             <span style={{fontSize:11,color:"rgba(255,255,255,.25)"}}>→</span>
             <select className="inp" value={moveFreezer}
@@ -1331,7 +1332,7 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,onMove,onMerge,kiosk,isGreen,isO
               {FREEZERS[moveFreezer].zones.map(z=><option key={z.id} value={z.id}>{z.label}</option>)}
             </select>
             <button className="btn" style={{padding:"4px 10px",fontSize:11}}
-              onClick={()=>{onMove(movePortions,moveFreezer,moveZone);setShowMove(false);}}>
+              onClick={()=>{onMove(Math.min(totalPortions,Math.max(1,Number(movePortions)||1)),moveFreezer,moveZone);setShowMove(false);}}>
               Move
             </button>
             <button className="btn btn-ghost" style={{padding:"4px 8px",fontSize:11}} onClick={()=>setShowMove(false)}>✕</button>
