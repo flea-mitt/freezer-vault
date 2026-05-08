@@ -310,6 +310,7 @@ function App() {
   const [scanFreezer,      setScanFreezer]       = useState("chest");
   const [scanZone,         setScanZone]          = useState("basket");
   const [scanMsg,          setScanMsg]           = useState(null);
+  const [scanToast,        setScanToast]         = useState(null);
   const [totalGrams,       setTotalGrams]       = useState("");
   const [converting,       setConverting]       = useState(false);
   const [convertError,     setConvertError]     = useState("");
@@ -362,6 +363,11 @@ function App() {
     await db.collection("items").doc(itemB.id).update({labelCode: sharedCode, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
   }
 
+  function showToast(text, ok) {
+    setScanToast({text, ok});
+    setTimeout(() => setScanToast(null), 2500);
+  }
+
   async function handleBarcode(code) {
     const trimmed = (code||"").trim();
     if (!trimmed) return;
@@ -375,16 +381,21 @@ function App() {
     if (item) {
       if (scanMode === "OUT") {
         adj(item.id, -1, item);
+        showToast(`✓ ${item.name}\n1 portion removed`, true);
         setScanMsg({text:`✓ ${item.name} — 1 removed`, ok:true});
       } else {
         await moveItem(item.id, item, itPortions(item), scanFreezer, scanZone);
-        setScanMsg({text:`✓ ${item.name} → ${getZone(scanFreezer,scanZone)?.label}`, ok:true});
+        const zoneName = getZone(scanFreezer, scanZone)?.label;
+        showToast(`✓ ${item.name}\nmoved to ${zoneName}`, true);
+        setScanMsg({text:`✓ ${item.name} → ${zoneName}`, ok:true});
       }
     } else if (scanMode === "IN" && isOwner) {
       setForm({...INIT, barcode: isFV ? "" : trimmed, freezer:scanFreezer, zone:scanZone});
       setEditId(null); setShowForm(true);
+      showToast(`Unknown barcode\n${trimmed}`, false);
       setScanMsg({text:"Unknown barcode — fill in details", ok:false});
     } else {
+      showToast(`Not found\n${trimmed}`, false);
       setScanMsg({text:`Unknown barcode`, ok:false});
     }
     setTimeout(() => setScanMsg(null), 3500);
@@ -1164,6 +1175,21 @@ function App() {
         <MergeModal source={mergeSource} allItems={items} FREEZERS={FREEZERS} getZone={getZone}
           onConfirm={(a,b)=>{linkBarcodes(a,b);setMergeSource(null);}}
           onClose={()=>setMergeSource(null)}/>
+      )}
+
+      {scanToast && (
+        <div style={{position:"fixed",top:kiosk?100:80,left:"50%",transform:"translateX(-50%)",zIndex:300,
+          background:scanToast.ok?"#052e16":"#450a0a",
+          border:`2px solid ${scanToast.ok?"#4ADE80":"#F87171"}`,
+          borderRadius:16,padding:"18px 32px",minWidth:240,textAlign:"center",
+          boxShadow:"0 8px 40px rgba(0,0,0,.6)",pointerEvents:"none",whiteSpace:"pre-line"}}>
+          <div style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:22,color:scanToast.ok?"#4ADE80":"#F87171",lineHeight:1.2}}>
+            {scanToast.text.split("\n")[0]}
+          </div>
+          {scanToast.text.includes("\n") && (
+            <div style={{fontSize:13,color:"rgba(255,255,255,.6)",marginTop:6}}>{scanToast.text.split("\n")[1]}</div>
+          )}
+        </div>
       )}
 
       {kiosk && (
@@ -2511,8 +2537,10 @@ function MergeModal({source, allItems, FREEZERS, getZone, onConfirm, onClose}) {
 }
 
 function ScanPanel({active, scanMode, setScanMode, scanFreezer, setScanFreezer, scanZone, setScanZone, scanMsg, onBarcode, FREEZERS}) {
-  const scannerRef = useRef(null);
-  const lastScan   = useRef(null);
+  const scannerRef   = useRef(null);
+  const lastScan     = useRef(null);
+  const onBarcodeRef = useRef(onBarcode);
+  useEffect(() => { onBarcodeRef.current = onBarcode; }, [onBarcode]);
 
   useEffect(() => {
     if (!active) {
@@ -2541,7 +2569,7 @@ function ScanPanel({active, scanMode, setScanMode, scanFreezer, setScanFreezer, 
             const now = Date.now();
             if (lastScan.current && lastScan.current.code===code && now-lastScan.current.time<1500) return;
             lastScan.current = {code, time:now};
-            onBarcode(code);
+            onBarcodeRef.current(code);
           },
           () => {}
         );
