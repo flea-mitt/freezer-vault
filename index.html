@@ -1361,10 +1361,13 @@ function OverviewPanel({items,allExpiring,totalPortions,lowStock,expiryInfo,getZ
     const catItems = items.filter(i => i.category === cat);
     if (catItems.length === 0) return null;
     // Deduplicate by group — grouped items count as one type
+    const lcMapLocal = {};
+    items.forEach(it => { if (it.labelCode) (lcMapLocal[it.labelCode] = lcMapLocal[it.labelCode]||[]).push(it); });
+    const sharedLCsLocal = new Set(Object.keys(lcMapLocal).filter(c => lcMapLocal[c].length > 1));
     const seen = new Set();
     let typeCount = 0;
     for (const item of catItems) {
-      const key = item.group || item.id;
+      const key = item.group ? `g:${item.group}` : (item.labelCode && sharedLCsLocal.has(item.labelCode) ? `lc:${item.labelCode}` : item.id);
       if (seen.has(key)) continue;
       seen.add(key);
       typeCount++;
@@ -1458,7 +1461,12 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
   function toggleCat(cat)  { setOpenCats(p  => ({...p, [cat]:  !p[cat]}));  }
   function toggleItem(key) { setOpenItems(p => ({...p, [key]: !p[key]})); }
 
-  // Build per-category entries, merging grouped items
+  // Build shared labelCode map
+  const lcMap = {};
+  items.forEach(it => { if (it.labelCode) (lcMap[it.labelCode] = lcMap[it.labelCode]||[]).push(it); });
+  const sharedLCs = new Set(Object.keys(lcMap).filter(c => lcMap[c].length > 1));
+
+  // Build per-category entries, merging grouped and labelCode-linked items
   const catEntries = CATEGORIES.map(cat => {
     const catItems = items.filter(i => i.category === cat);
     if (catItems.length === 0) return null;
@@ -1466,20 +1474,29 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
     const seen    = new Set();
     const entries = [];
     for (const item of catItems) {
-      const key = item.group || item.id;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      let key, entry;
       if (item.group) {
-        const grouped = catItems.filter(i => i.group === item.group);
-        // also include items in OTHER categories with same group
+        key = `g:${item.group}`;
+        if (seen.has(key)) continue;
         const allGrouped = items.filter(i => i.group === item.group);
-        const totalBags  = allGrouped.reduce((s,i) => s+(i.bags||1), 0);
+        const totalBags = allGrouped.reduce((s,i) => s+(i.bags||1), 0);
         const totalPortions = allGrouped.reduce((s,i) => s+(Number(i.bags||1)*Number(i.qty)), 0);
-        entries.push({ key, isGroup:true, name:item.group, totalBags, totalPortions, items:allGrouped });
+        entry = { key, badge:"group", name:item.group, totalBags, totalPortions, items:allGrouped };
+      } else if (item.labelCode && sharedLCs.has(item.labelCode)) {
+        key = `lc:${item.labelCode}`;
+        if (seen.has(key)) continue;
+        const linked = lcMap[item.labelCode];
+        const totalBags = linked.reduce((s,i) => s+(i.bags||1), 0);
+        const totalPortions = linked.reduce((s,i) => s+(Number(i.bags||1)*Number(i.qty)), 0);
+        entry = { key, badge:"linked", name:item.name, totalBags, totalPortions, items:linked };
       } else {
-        entries.push({ key, isGroup:false, name:item.name, totalBags:item.bags||1,
-          totalPortions:Number(item.bags||1)*Number(item.qty), items:[item] });
+        key = item.id;
+        if (seen.has(key)) continue;
+        entry = { key, badge:null, name:item.name, totalBags:item.bags||1,
+          totalPortions:Number(item.bags||1)*Number(item.qty), items:[item] };
       }
+      seen.add(key);
+      entries.push(entry);
     }
     const totalBags = entries.reduce((s,e) => s+e.totalBags, 0);
     return { cat, entries, totalBags };
@@ -1513,7 +1530,7 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
                       onMouseEnter={e=>e.currentTarget.style.background="rgba(56,189,248,.08)"}
                       onMouseLeave={e=>e.currentTarget.style.background=openItems[entry.key]?"rgba(56,189,248,.08)":"transparent"}>
                       <span style={{fontSize:10,color:"rgba(255,255,255,.2)",width:12}}>{openItems[entry.key]?"▾":"▸"}</span>
-                      {entry.isGroup && <span style={{fontSize:9,color:"rgba(125,211,252,.4)",background:"rgba(125,211,252,.08)",borderRadius:4,padding:"1px 5px"}}>⛓</span>}
+                      {entry.badge && <span style={{fontSize:9,color:"rgba(125,211,252,.4)",background:"rgba(125,211,252,.08)",borderRadius:4,padding:"1px 5px"}}>⛓ {entry.badge}</span>}
                       <span style={{flex:1,fontSize:12,color:"#E0F2FE"}}>{entry.name}</span>
                       <span style={{fontSize:11,color:"rgba(255,255,255,.35)"}}>{entry.totalPortions} portions</span>
                       <span style={{fontSize:11,color:"#7DD3FC",minWidth:40,textAlign:"right"}}>{entry.totalBags} bags</span>
