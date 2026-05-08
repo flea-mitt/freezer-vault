@@ -400,8 +400,8 @@ function App() {
     const isFV = trimmed.startsWith("FV:");
     const matchCode = i => (i.labelCode || itemLabelCode(i.id)) === trimmed || (i.barcode && i.barcode === trimmed);
     const itemInLocation = isFV
-      ? items.find(i => i.id === trimmed.slice(3) && i.freezer === scanFreezer)
-      : items.find(i => matchCode(i) && i.freezer === scanFreezer);
+      ? items.find(i => i.id === trimmed.slice(3) && i.freezer === scanFreezer && i.zone === scanZone)
+      : items.find(i => matchCode(i) && i.freezer === scanFreezer && i.zone === scanZone);
     const itemAnywhere = !itemInLocation && (isFV
       ? items.find(i => i.id === trimmed.slice(3))
       : items.find(i => matchCode(i)));
