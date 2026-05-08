@@ -208,6 +208,12 @@ function fmtTime(ts) {
   return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"}) + " " +
          d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});
 }
+function itemLabelCode(id) {
+  let h = 5381;
+  for (let i = 0; i < id.length; i++) h = (((h << 5) + h) ^ id.charCodeAt(i)) >>> 0;
+  return String(h % 1000000).padStart(6, '0');
+}
+
 function getWeekMonday(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -354,7 +360,8 @@ function App() {
     const isFV = trimmed.startsWith("FV:");
     const item = isFV
       ? items.find(i => i.id === trimmed.slice(3))
-      : items.find(i => i.barcode && i.barcode === trimmed);
+      : items.find(i => itemLabelCode(i.id) === trimmed)
+        || items.find(i => i.barcode && i.barcode === trimmed);
     if (item) {
       if (scanMode === "OUT") {
         adj(item.id, -1, item);
@@ -2496,7 +2503,7 @@ function LabelsPanel({items, FREEZERS, getZone}) {
   }
 
   function copyAll() {
-    const text = filtered.map(it=>`${it.name}\tFV:${it.id}`).join("\n");
+    const text = filtered.map(it=>`${it.name}\t${itemLabelCode(it.id)}`).join("\n");
     navigator.clipboard?.writeText(text).catch(()=>{});
     setCopied("all"); setTimeout(()=>setCopied(null), 1500);
   }
@@ -2515,14 +2522,13 @@ function LabelsPanel({items, FREEZERS, getZone}) {
       </div>
 
       <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:14,lineHeight:1.6}}>
-        Enter the <span style={{color:"#7DD3FC",fontFamily:"monospace"}}>FV:…</span> code into your Niimbot app as the barcode value. Shop-bought items with a barcode stored will show that too.
+        Use format <span style={{color:"#7DD3FC",fontFamily:"monospace"}}>ITF-25</span> (or Code128) and enter the 6-digit code. ITF-25 produces the shortest barcodes on small labels.
       </div>
 
       <div style={{display:"flex",flexDirection:"column",gap:4}}>
         {filtered.map(item => {
           const zone = getZone(item.freezer, item.zone);
           const fz   = FREEZERS[item.freezer];
-          const fvCode = `FV:${item.id}`;
           return (
             <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",borderRadius:9}}>
               <div style={{flex:1,minWidth:0}}>
@@ -2531,8 +2537,8 @@ function LabelsPanel({items, FREEZERS, getZone}) {
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontFamily:"monospace",fontSize:11,color:"#7DD3FC",letterSpacing:".04em"}}>{fvCode}</span>
-                  <button className="btn btn-ghost" style={{padding:"2px 8px",fontSize:10}} onClick={()=>copyCode(fvCode, item.id)}>
+                  <span style={{fontFamily:"monospace",fontSize:14,color:"#7DD3FC",letterSpacing:".12em",fontWeight:600}}>{itemLabelCode(item.id)}</span>
+                  <button className="btn btn-ghost" style={{padding:"2px 8px",fontSize:10}} onClick={()=>copyCode(itemLabelCode(item.id), item.id)}>
                     {copied===item.id ? "✓" : "copy"}
                   </button>
                 </div>
