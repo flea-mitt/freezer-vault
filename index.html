@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -2490,6 +2491,21 @@ function ScanPanel({active, scanMode, setScanMode, scanFreezer, setScanFreezer, 
   );
 }
 
+function BarcodeImg({value}) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!ref.current || !window.JsBarcode) return;
+    try {
+      JsBarcode(ref.current, value, {
+        format:"CODE128", width:2, height:44,
+        displayValue:true, fontSize:11, margin:4,
+        background:"#ffffff", lineColor:"#000000"
+      });
+    } catch(e) {}
+  }, [value]);
+  return <svg ref={ref} style={{display:"block",width:"100%"}}/>;
+}
+
 function LabelsPanel({items, FREEZERS, getZone}) {
   const [filterFreezer, setFilterFreezer] = useState("all");
   const [copied, setCopied] = useState(null);
@@ -2522,7 +2538,7 @@ function LabelsPanel({items, FREEZERS, getZone}) {
       </div>
 
       <div style={{fontSize:11,color:"rgba(255,255,255,.3)",marginBottom:14,lineHeight:1.6}}>
-        Use format <span style={{color:"#7DD3FC",fontFamily:"monospace"}}>ITF-25</span> (or Code128) and enter the 6-digit code. ITF-25 produces the shortest barcodes on small labels.
+        Use <span style={{color:"#7DD3FC"}}>Code128</span> format in Niimbot and enter the 6-digit code. Code128 auto-selects the most compact encoding for digits.
       </div>
 
       <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -2530,24 +2546,24 @@ function LabelsPanel({items, FREEZERS, getZone}) {
           const zone = getZone(item.freezer, item.zone);
           const fz   = FREEZERS[item.freezer];
           return (
-            <div key={item.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",borderRadius:9}}>
+            <div key={item.id} style={{display:"flex",alignItems:"center",gap:14,padding:"10px 14px",background:"rgba(255,255,255,.04)",border:"1px solid rgba(125,211,252,.1)",borderRadius:9}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,color:"#E0F2FE",fontWeight:500}}>{item.name}</div>
                 <div style={{fontSize:10,color:"rgba(255,255,255,.35)",marginTop:2}}>{fz?.icon} {fz?.label} · {zone?.label} · {item.category}</div>
+                {item.barcode && (
+                  <div style={{fontSize:10,color:"rgba(255,255,255,.3)",marginTop:2,fontFamily:"monospace"}}>shop: {item.barcode}</div>
+                )}
               </div>
-              <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",flexShrink:0}}>
+              <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+                <div style={{background:"#fff",borderRadius:6,padding:"4px 6px",width:160}}>
+                  <BarcodeImg value={itemLabelCode(item.id)}/>
+                </div>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontFamily:"monospace",fontSize:14,color:"#7DD3FC",letterSpacing:".12em",fontWeight:600}}>{itemLabelCode(item.id)}</span>
+                  <span style={{fontFamily:"monospace",fontSize:11,color:"rgba(255,255,255,.4)"}}>{itemLabelCode(item.id)}</span>
                   <button className="btn btn-ghost" style={{padding:"2px 8px",fontSize:10}} onClick={()=>copyCode(itemLabelCode(item.id), item.id)}>
                     {copied===item.id ? "✓" : "copy"}
                   </button>
                 </div>
-                {item.barcode && (
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontFamily:"monospace",fontSize:10,color:"rgba(255,255,255,.4)"}}>{item.barcode}</span>
-                    <span style={{fontSize:9,color:"rgba(255,255,255,.25)",background:"rgba(255,255,255,.06)",borderRadius:4,padding:"1px 5px"}}>shop</span>
-                  </div>
-                )}
               </div>
             </div>
           );
