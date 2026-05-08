@@ -2563,90 +2563,76 @@ function MergeModal({source, allItems, FREEZERS, getZone, onConfirm, onClose}) {
 }
 
 function ScanPanel({active, scanMode, setScanMode, scanFreezer, setScanFreezer, scanZone, setScanZone, scanMsg, onBarcode, FREEZERS}) {
-  const scannerRef   = useRef(null);
-  const lastScan     = useRef(null);
   const onBarcodeRef = useRef(onBarcode);
   useEffect(() => { onBarcodeRef.current = onBarcode; }, [onBarcode]);
 
+  const inputRef  = useRef(null);
+  const [val, setVal]       = useState("");
+  const [focused, setFocused] = useState(false);
+
   useEffect(() => {
-    if (!active) {
-      if (scannerRef.current) { scannerRef.current.stop().catch(()=>{}); scannerRef.current = null; }
-      return;
-    }
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      if (cancelled) return;
-      try {
-        const s = new Html5Qrcode("kiosk-cam", {
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.CODE_39,
-          ]
-        });
-        scannerRef.current = s;
-        await s.start(
-          {facingMode:"environment"},
-          {fps:10, qrbox:{width:200,height:100}},
-          (code) => {
-            if (cancelled) return;
-            const now = Date.now();
-            if (lastScan.current && lastScan.current.code===code && now-lastScan.current.time<1500) return;
-            lastScan.current = {code, time:now};
-            onBarcodeRef.current(code);
-          },
-          () => {}
-        );
-      } catch(e) { console.warn("Kiosk scanner:", e); }
-    }, 400);
-    return () => {
-      cancelled = true; clearTimeout(t);
-      if (scannerRef.current) { scannerRef.current.stop().catch(()=>{}); scannerRef.current = null; }
-    };
+    if (active) setTimeout(() => inputRef.current?.focus(), 300);
   }, [active]);
 
-  const fz = FREEZERS[scanFreezer];
+  function handleKey(e) {
+    if (e.key === "Enter") {
+      const code = val.trim();
+      if (code.length >= 4) onBarcodeRef.current(code);
+      setVal("");
+      e.preventDefault();
+    }
+  }
+
+  const fz   = FREEZERS[scanFreezer];
   const isIN = scanMode === "IN";
 
   return (
-    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:60,background:"rgba(6,16,28,.97)",borderTop:"2px solid rgba(125,211,252,.2)",padding:"10px 20px",display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}} className="no-print">
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:60,background:"rgba(6,16,28,.97)",borderTop:"2px solid rgba(125,211,252,.2)",padding:"12px 20px",display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}} className="no-print">
 
-      {/* Camera preview */}
-      <div id="kiosk-cam" style={{width:220,height:100,borderRadius:8,overflow:"hidden",flexShrink:0,background:"#000"}}/>
+      {/* Mode controls */}
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <button className={`btn ${!isIN?"btn-danger":"btn-ghost"}`} style={{padding:"5px 16px"}} onClick={()=>setScanMode("OUT")}>OUT</button>
+        <button className={`btn ${isIN?"btn-primary":"btn-ghost"}`}  style={{padding:"5px 16px"}} onClick={()=>setScanMode("IN")}>IN</button>
+        {isIN && <>
+          <span style={{fontSize:10,color:"rgba(255,255,255,.25)"}}>→</span>
+          {Object.values(FREEZERS).map(f=>(
+            <button key={f.id} className={`btn ${scanFreezer===f.id?"btn-primary":"btn-ghost"}`} style={{padding:"5px 12px"}} onClick={()=>{setScanFreezer(f.id);setScanZone(f.zones[0].id);}}>
+              {f.icon} {f.label}
+            </button>
+          ))}
+          <select className="inp" value={scanZone} onChange={e=>setScanZone(e.target.value)} style={{width:150,fontSize:12,padding:"4px 8px"}}>
+            {fz?.zones.map(z=><option key={z.id} value={z.id}>{z.label}</option>)}
+          </select>
+        </>}
+      </div>
 
-      {/* Controls */}
-      <div style={{display:"flex",flexDirection:"column",gap:8,flex:1}}>
-        {/* IN / OUT */}
-        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-          <span style={{fontSize:10,color:"rgba(255,255,255,.4)",minWidth:28}}>Mode</span>
-          <button className={`btn ${!isIN?"btn-danger":"btn-ghost"}`} style={{padding:"4px 14px",fontSize:12}} onClick={()=>setScanMode("OUT")}>OUT</button>
-          <button className={`btn ${isIN?"btn-primary":"btn-ghost"}`}  style={{padding:"4px 14px",fontSize:12}} onClick={()=>setScanMode("IN")}>IN</button>
-          {isIN && (
-            <>
-              <span style={{fontSize:10,color:"rgba(255,255,255,.25)",margin:"0 4px"}}>→</span>
-              {Object.values(FREEZERS).map(f=>(
-                <button key={f.id} className={`btn ${scanFreezer===f.id?"btn-primary":"btn-ghost"}`} style={{padding:"4px 12px",fontSize:12}} onClick={()=>{setScanFreezer(f.id);setScanZone(f.zones[0].id);}}>
-                  {f.icon} {f.label}
-                </button>
-              ))}
-              <select className="inp" value={scanZone} onChange={e=>setScanZone(e.target.value)} style={{width:150,fontSize:12,padding:"4px 8px"}}>
-                {fz?.zones.map(z=><option key={z.id} value={z.id}>{z.label}</option>)}
-              </select>
-            </>
-          )}
-        </div>
-
-        {/* Status */}
-        {scanMsg ? (
-          <div style={{fontSize:12,color:scanMsg.ok?"#4ADE80":"#FB923C",fontWeight:500}}>{scanMsg.text}</div>
-        ) : (
-          <div style={{fontSize:11,color:"rgba(255,255,255,.25)"}}>
-            {isIN ? `Scanning IN → ${FREEZERS[scanFreezer]?.label} / ${fz?.zones.find(z=>z.id===scanZone)?.label}` : "Scanning OUT — point at a label"}
-          </div>
+      {/* Scan input */}
+      <div style={{display:"flex",gap:8,alignItems:"center",flex:1,minWidth:200}}>
+        <input
+          ref={inputRef}
+          className="inp"
+          value={val}
+          onChange={e=>setVal(e.target.value)}
+          onKeyDown={handleKey}
+          onFocus={()=>setFocused(true)}
+          onBlur={()=>setFocused(false)}
+          placeholder={focused ? "Scan now…" : "⚠ Tap here to activate scanner"}
+          style={{fontFamily:"monospace",fontSize:13,flex:1,
+            borderColor: focused ? "#4ADE80" : "rgba(251,146,60,.6)",
+            background: focused ? "rgba(74,222,128,.07)" : "rgba(251,146,60,.07)"}}
+        />
+        {!focused && (
+          <button className="btn btn-ghost" style={{fontSize:11,flexShrink:0,borderColor:"rgba(251,146,60,.4)",color:"#FB923C"}}
+            onClick={()=>inputRef.current?.focus()}>
+            Activate
+          </button>
         )}
       </div>
+
+      {/* Status */}
+      {scanMsg && (
+        <div style={{fontSize:12,color:scanMsg.ok?"#4ADE80":"#FB923C",fontWeight:500,flexShrink:0}}>{scanMsg.text}</div>
+      )}
     </div>
   );
 }
