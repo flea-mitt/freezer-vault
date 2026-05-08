@@ -407,15 +407,15 @@ function App() {
       : items.find(i => matchCode(i)));
 
     if (scanMode === "OUT") {
-      const item = itemInLocation || itemAnywhere;
-      if (item) {
-        adj(item.id, -1, item);
-        const fzLabel = FREEZERS[item.freezer]?.label;
-        showToast(`✓ ${item.name}\n1 removed from ${fzLabel}`, true);
-        setScanMsg({text:`✓ ${item.name} — 1 removed`, ok:true});
+      if (itemInLocation) {
+        adj(itemInLocation.id, -1, itemInLocation);
+        const zoneName = getZone(scanFreezer, scanZone)?.label;
+        showToast(`✓ ${itemInLocation.name}\n1 removed from ${zoneName}`, true);
+        setScanMsg({text:`✓ ${itemInLocation.name} — 1 removed`, ok:true});
       } else {
-        showToast(`Not found\n${trimmed}`, false);
-        setScanMsg({text:`Not found`, ok:false});
+        const zoneName = getZone(scanFreezer, scanZone)?.label;
+        showToast(`Not found\nin ${zoneName}`, false);
+        setScanMsg({text:`Not found in ${zoneName}`, ok:false});
       }
     } else {
       if (itemInLocation) {
