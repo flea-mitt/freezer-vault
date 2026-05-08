@@ -1546,10 +1546,10 @@ function CategoryList({items, CATEGORIES, FREEZERS, getZone}) {
                           return (
                             <div key={it.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:"rgba(0,0,0,.15)",borderRadius:6}}>
                               <span style={{fontSize:12}}>{fz?.icon}</span>
-                              <span style={{fontSize:11,color:"rgba(255,255,255,.5)",flex:1}}>{fz?.label} · {zone?.label}</span>
-                              {entry.isGroup && <span style={{fontSize:11,color:"rgba(255,255,255,.6)"}}>{it.name}</span>}
-                              <span style={{fontSize:11,color:"#7DD3FC"}}>{it.bags||1} bag{(it.bags||1)!==1?"s":""}</span>
-                              {it.qty>1 && <span style={{fontSize:10,color:"rgba(255,255,255,.3)"}}>× {it.qty} {it.unit}</span>}
+                              <span style={{fontSize:11,color:"rgba(255,255,255,.4)",flexShrink:0}}>{fz?.label} · {zone?.label}</span>
+                              {entry.items.length > 1 && <span style={{fontSize:11,color:"rgba(255,255,255,.7)",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.name}</span>}
+                              <span style={{fontSize:11,color:"#7DD3FC",flexShrink:0}}>{it.bags||1} bag{(it.bags||1)!==1?"s":""}</span>
+                              {it.qty>1 && <span style={{fontSize:10,color:"rgba(255,255,255,.3)",flexShrink:0}}>× {it.qty} {it.unit}</span>}
                             </div>
                           );
                         })}
