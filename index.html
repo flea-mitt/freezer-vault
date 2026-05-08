@@ -228,7 +228,7 @@ const INIT = {
   bags:1, qty:1, unit:"portions", storage:"box", dateFrozen:todayStr(), bestBefore:"",
   notify:false, minBags:1, group:"",
   calories:"", protein:"", carbs:"", fat:"",
-  recipeUrl:"", notes:"", barcode:""
+  recipeUrl:"", notes:"", barcode:"", labelCode:""
 };
 
 function App() {
@@ -655,8 +655,12 @@ function App() {
   }
 
   function groupPortionsCount(item) {
-    if (!item.group) return itemPortions(item);
-    return items.filter(i => i.group === item.group).reduce((s,i) => s + itemPortions(i), 0);
+    if (item.group) return items.filter(i => i.group === item.group).reduce((s,i) => s + itemPortions(i), 0);
+    if (item.labelCode) {
+      const linked = items.filter(i => i.labelCode === item.labelCode);
+      if (linked.length > 1) return linked.reduce((s,i) => s + itemPortions(i), 0);
+    }
+    return itemPortions(item);
   }
 
   const allExpiring   = items.filter(it=>{const d=daysUntil(it.bestBefore);return d!==null&&d>=0&&d<=14;});
@@ -664,8 +668,9 @@ function App() {
   // Low stock: deduplicate grouped items so we only alert once per group
   const lowStockRaw = items.filter(it => it.notify && groupPortionsCount(it) <= (it.minBags||1));
   const lowStock = lowStockRaw.filter((it,i,arr) => {
-    if (!it.group) return true;
-    return arr.findIndex(x => x.group === it.group) === i; // keep first of each group
+    if (it.group) return arr.findIndex(x => x.group === it.group) === i;
+    if (it.labelCode) return arr.findIndex(x => x.labelCode === it.labelCode) === i;
+    return true;
   });
   const totalPortions = items.reduce((s,i)=>s+(Number(i.bags||1)*Number(i.qty)),0);
   const fz = FREEZERS[activeFreezer] || FREEZERS.chest;
@@ -678,7 +683,7 @@ function App() {
       bags:item.bags||1,qty:item.qty,unit:item.unit,dateFrozen:item.dateFrozen||todayStr(),bestBefore:item.bestBefore||"",
       notify:item.notify||false,minBags:item.minBags||1,group:item.group||"",
       calories:item.calories||"",protein:item.protein||"",carbs:item.carbs||"",fat:item.fat||"",
-      recipeUrl:item.recipeUrl||"",notes:item.notes||"",barcode:item.barcode||""});
+      recipeUrl:item.recipeUrl||"",notes:item.notes||"",barcode:item.barcode||"",labelCode:item.labelCode||""});
     setEditId(item.id); setShowForm(true); setTotalGrams(""); setConvertError("");
   }
 
@@ -1083,6 +1088,7 @@ function App() {
               <Field label="SHOP BARCODE (optional)">
                 <input className="inp" placeholder="e.g. 5010477348938" value={form.barcode} onChange={e=>setForm(f=>({...f,barcode:e.target.value}))}/>
               </Field>
+
 
               {/* Nutrition */}
               <div style={{borderTop:"1px solid rgba(125,211,252,.08)",paddingTop:12}}>
@@ -2591,6 +2597,27 @@ function LabelsPanel({items, FREEZERS, getZone, db}) {
   const [filterFreezer, setFilterFreezer] = useState("all");
   const [copied, setCopied] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editingVal, setEditingVal] = useState("");
+
+  function startEdit(item) {
+    setEditingId(item.id);
+    setEditingVal(item.labelCode || itemLabelCode(item.id));
+  }
+
+  async function saveEdit(item) {
+    const val = editingVal.trim().replace(/\D/g,"").slice(0,6);
+    if (val.length === 6) {
+      await db.collection("items").doc(item.id).update({labelCode: val});
+    }
+    setEditingId(null);
+  }
+
+  function resetCode(item) {
+    const code = itemLabelCode(item.id);
+    db.collection("items").doc(item.id).update({labelCode: code});
+    setEditingId(null);
+  }
 
   async function generateMissingCodes() {
     setGenerating(true);
@@ -2656,13 +2683,24 @@ function LabelsPanel({items, FREEZERS, getZone, db}) {
                 <div style={{background:"#fff",borderRadius:6,padding:"4px 6px",width:160}}>
                   <BarcodeImg value={item.labelCode||itemLabelCode(item.id)}/>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",justifyContent:"center"}}>
-                  <span style={{fontFamily:"monospace",fontSize:11,color:"rgba(255,255,255,.4)"}}>{item.labelCode||itemLabelCode(item.id)}</span>
-                  {item.labelCode && <span style={{fontSize:9,color:"rgba(52,211,153,.7)",background:"rgba(52,211,153,.1)",borderRadius:4,padding:"1px 5px"}}>linked</span>}
-                  <button className="btn btn-ghost" style={{padding:"2px 8px",fontSize:10}} onClick={()=>copyCode(item.labelCode||itemLabelCode(item.id), item.id)}>
-                    {copied===item.id ? "✓" : "copy"}
-                  </button>
-                </div>
+                {editingId===item.id ? (
+                  <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                    <input className="inp" value={editingVal} autoFocus
+                      onChange={e=>setEditingVal(e.target.value.replace(/\D/g,"").slice(0,6))}
+                      onKeyDown={e=>{if(e.key==="Enter")saveEdit(item);if(e.key==="Escape")setEditingId(null);}}
+                      style={{width:80,fontFamily:"monospace",fontSize:13,letterSpacing:".1em",padding:"3px 6px",textAlign:"center"}}/>
+                    <button className="btn btn-primary" style={{padding:"2px 8px",fontSize:10}} onClick={()=>saveEdit(item)}>✓</button>
+                    <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}} onClick={()=>setEditingId(null)}>✕</button>
+                  </div>
+                ) : (
+                  <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap",justifyContent:"center"}}>
+                    <span style={{fontFamily:"monospace",fontSize:13,color:"rgba(255,255,255,.5)",letterSpacing:".1em"}}>{item.labelCode||itemLabelCode(item.id)}</span>
+                    {item.labelCode && <span style={{fontSize:9,color:"rgba(52,211,153,.7)",background:"rgba(52,211,153,.1)",borderRadius:4,padding:"1px 5px"}}>linked</span>}
+                    <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}} onClick={()=>startEdit(item)}>✎</button>
+                    <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:10}} onClick={()=>copyCode(item.labelCode||itemLabelCode(item.id),item.id)}>{copied===item.id?"✓":"copy"}</button>
+                    {item.labelCode && item.labelCode!==itemLabelCode(item.id) && <button className="btn btn-ghost" style={{padding:"2px 6px",fontSize:9}} onClick={()=>resetCode(item)}>reset</button>}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -2680,20 +2718,35 @@ function StockWatchPanel({items, FREEZERS, getZone, groupBagCount, groupPortions
     return it.totalPortions != null ? Number(it.totalPortions) : (Number(it.bags||1) * qty);
   }
 
+  // Build labelCode → items map to detect shared codes
+  const lcMap = {};
+  watchedItems.forEach(it => { if (it.labelCode) { (lcMap[it.labelCode] = lcMap[it.labelCode]||[]).push(it); } });
+  const sharedLCs = new Set(Object.keys(lcMap).filter(c => lcMap[c].length > 1));
+
   const seen = new Set();
   const watchList = [];
   for (const item of watchedItems) {
-    const key = item.group || item.id;
-    if (seen.has(key)) continue;
-    seen.add(key);
+    let key, groupItems, name, badge;
     if (item.group) {
-      const groupItems   = watchedItems.filter(i => i.group === item.group);
-      const totalPortions = groupItems.reduce((s,i) => s + itemPortions(i), 0);
-      const minPortions   = Math.max(...groupItems.map(i => i.minBags||1));
-      watchList.push({ type:"group", key, name:item.group, totalPortions, minPortions, items:groupItems });
+      key = `g:${item.group}`;
+      if (seen.has(key)) continue;
+      groupItems = watchedItems.filter(i => i.group === item.group);
+      name = item.group; badge = "group";
+    } else if (item.labelCode && sharedLCs.has(item.labelCode)) {
+      key = `lc:${item.labelCode}`;
+      if (seen.has(key)) continue;
+      groupItems = lcMap[item.labelCode];
+      name = item.name; badge = "linked";
     } else {
-      watchList.push({ type:"single", key, name:item.name, totalPortions:itemPortions(item), minPortions:item.minBags||1, items:[item] });
+      key = item.id;
+      if (seen.has(key)) continue;
+      groupItems = [item];
+      name = item.name; badge = null;
     }
+    seen.add(key);
+    const totalPortions = groupItems.reduce((s,i) => s + itemPortions(i), 0);
+    const minPortions   = Math.max(...groupItems.map(i => i.minBags||1));
+    watchList.push({ key, name, badge, totalPortions, minPortions, items:groupItems });
   }
 
   if (watchList.length === 0) return (
@@ -2723,7 +2776,7 @@ function StockWatchPanel({items, FREEZERS, getZone, groupBagCount, groupPortions
             {/* Header row */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                {entry.type==="group" && <span style={{fontSize:10,color:"rgba(255,255,255,.3)",background:"rgba(255,255,255,.06)",borderRadius:6,padding:"2px 7px"}}>⛓ group</span>}
+                {entry.badge && <span style={{fontSize:10,color:"rgba(255,255,255,.3)",background:"rgba(255,255,255,.06)",borderRadius:6,padding:"2px 7px"}}>⛓ {entry.badge}</span>}
                 <span style={{fontFamily:"'Space Grotesk',sans-serif",fontWeight:700,fontSize:14,color:isLow?"#F87171":"#BAE6FD"}}>{entry.name}</span>
                 {isLow && <span className="pulse" style={{fontSize:10,color:"#F87171",background:"rgba(248,113,113,.15)",border:"1px solid rgba(248,113,113,.3)",borderRadius:10,padding:"1px 8px"}}>🔔 LOW</span>}
               </div>
