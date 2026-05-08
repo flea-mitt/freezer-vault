@@ -363,6 +363,32 @@ function App() {
     await db.collection("items").doc(itemB.id).update({labelCode: sharedCode, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
   }
 
+  // Keep a ref so the keyboard listener always calls the latest handleBarcode
+  const handleBarcodeRef = useRef(null);
+  useEffect(() => { handleBarcodeRef.current = handleBarcode; });
+
+  // Global keyboard listener for hardware barcode scanners (USB/Bluetooth)
+  useEffect(() => {
+    let buf = "", timer = null;
+    function onKey(e) {
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "Enter") {
+        if (buf.length >= 4) handleBarcodeRef.current?.(buf);
+        buf = ""; clearTimeout(timer);
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        buf += e.key;
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (buf.length >= 4) handleBarcodeRef.current?.(buf);
+          buf = "";
+        }, 80);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("keydown", onKey); clearTimeout(timer); };
+  }, []);
+
   function showToast(text, ok) {
     setScanToast({text, ok});
     setTimeout(() => setScanToast(null), 2500);
