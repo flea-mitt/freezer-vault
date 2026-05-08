@@ -2006,11 +2006,22 @@ function HistoryPanel({db, FREEZERS, getZone}) {
     added:        { label:"Added",         color:"#4ADE80", icon:"＋" },
     removed:      { label:"Removed",       color:"#F87171", icon:"−" },
     edited:       { label:"Edited",        color:"#FDE68A", icon:"✎" },
+    moved:        { label:"Moved",         color:"#A78BFA", icon:"↗" },
+    merged:       { label:"Merged",        color:"#34D399", icon:"⇌" },
     bags_added:      { label:"Bags added",       color:"#7DD3FC", icon:"↑" },
     bags_removed:    { label:"Bags removed",     color:"#FB923C", icon:"↓" },
     portions_added:  { label:"Portions added",   color:"#7DD3FC", icon:"↑" },
     portions_removed:{ label:"Portions removed", color:"#FB923C", icon:"↓" },
   };
+
+  function fmtLoc(locStr) {
+    if (!locStr) return null;
+    const [fzId, zoneId] = locStr.split("/");
+    const fz   = FREEZERS[fzId];
+    const zone = getZone(fzId, zoneId);
+    if (!fz || !zone) return locStr;
+    return `${fz.icon} ${zone.label}`;
+  }
 
   function fmtTs(ts) {
     if (!ts) return "—";
@@ -2080,6 +2091,12 @@ function HistoryPanel({db, FREEZERS, getZone}) {
                 {entry.action==="bags_removed"      && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} bags)</span>}
                 {entry.action==="portions_added"    && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} portions)</span>}
                 {entry.action==="portions_removed"  && <span style={{fontSize:11,color:"rgba(255,255,255,.4)"}}>({entry.from} → {entry.to} portions)</span>}
+                {entry.action==="moved" && entry.from && entry.to && (
+                  <span style={{fontSize:11,color:"rgba(167,139,250,.7)"}}>
+                    {fmtLoc(entry.from)} → {fmtLoc(entry.to)}
+                    {entry.portions && <span style={{color:"rgba(255,255,255,.35)",marginLeft:4}}>({entry.portions} portion{entry.portions!==1?"s":""})</span>}
+                  </span>
+                )}
                 {entry.note && <span style={{fontSize:11,color:"rgba(255,255,255,.35)",fontStyle:"italic"}}>{entry.note}</span>}
               </div>
               <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap",alignItems:"center"}}>
