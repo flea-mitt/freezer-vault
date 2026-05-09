@@ -2192,7 +2192,9 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   const [editMode, setEditMode] = useState("text");
 
   const SLOTS = [{key:"b",label:"Breakfast"},{key:"l",label:"Lunch"},{key:"d",label:"Dinner"},{key:"s",label:"Snacks"}];
-  const weekKey = weekStart.toISOString().split("T")[0];
+  const localDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const todayIso = localDateStr(new Date());
+  const weekKey = localDateStr(weekStart);
   const nextWeekStart = new Date(weekStart); nextWeekStart.setDate(nextWeekStart.getDate() + 7);
   const nextWeekKey = localDateStr(nextWeekStart);
 
@@ -2278,8 +2280,6 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   const p1Color = "#7DD3FC"; const p2Color = "#34D399";
   const editSlotLabel = editCell ? SLOTS.find(s=>s.key===editCell.slot)?.label : "";
   const editPersonName = editCell ? (editCell.person==="p1"?person1Name:person2Name) : "";
-  const localDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const todayIso = localDateStr(new Date());
 
   // Meal suggestions based on expiry
   const slotForCat = cat => cat==="Soups & Broths"?"l":cat==="Snacks"?"s":"d";
