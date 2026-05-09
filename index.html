@@ -2193,17 +2193,26 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
 
   const SLOTS = [{key:"b",label:"Breakfast"},{key:"l",label:"Lunch"},{key:"d",label:"Dinner"},{key:"s",label:"Snacks"}];
   const weekKey = weekStart.toISOString().split("T")[0];
+  const nextWeekStart = new Date(weekStart); nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+  const nextWeekKey = localDateStr(nextWeekStart);
 
   function normalizeSlot(val) {
     if (!val) return [];
     return Array.isArray(val) ? val : [val];
   }
 
+  const [nextMonday, setNextMonday] = useState({});
+
   useEffect(() => {
     setLoading(true);
-    db.collection("mealPlan").doc(weekKey).get()
-      .then(snap => { setDays(snap.exists ? (snap.data().days || {}) : {}); setLoading(false); })
-      .catch(() => setLoading(false));
+    Promise.all([
+      db.collection("mealPlan").doc(weekKey).get(),
+      db.collection("mealPlan").doc(nextWeekKey).get()
+    ]).then(([snap, nextSnap]) => {
+      setDays(snap.exists ? (snap.data().days || {}) : {});
+      setNextMonday(nextSnap.exists ? (nextSnap.data().days?.[0] || {}) : {});
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [weekKey]);
 
   async function saveDays(updated) {
@@ -2317,19 +2326,19 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
 
   // Build defrost schedule: for each freezer item in the plan, take out 1 day before
   const defrostMap = {};
-  weekDays.forEach((d, i) => {
-    const dayData = days[i] || {};
+
+  function addToDefrostMap(dayData, targetDate, dayLabel) {
     SLOTS.forEach(slot => {
       ["p1","p2"].forEach(person => {
         normalizeSlot(dayData[person]?.[slot.key]).forEach(m => {
           if (!m.itemId) return;
-          const defrost = new Date(d);
+          const defrost = new Date(targetDate);
           defrost.setDate(defrost.getDate() - 1);
           const key = localDateStr(defrost);
           if (!defrostMap[key]) defrostMap[key] = [];
           defrostMap[key].push({
             itemName: m.label,
-            forDay: DAY_NAMES[i],
+            forDay: dayLabel,
             slotLabel: slot.label,
             personName: person==="p1" ? person1Name : person2Name,
             defrostDate: defrost,
@@ -2337,7 +2346,14 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
         });
       });
     });
-  });
+  }
+
+  // Current week's meals
+  weekDays.forEach((d, i) => addToDefrostMap(days[i] || {}, d, DAY_NAMES[i]));
+
+  // Next week's Monday — defrost falls on Sunday of the current week
+  addToDefrostMap(nextMonday, nextWeekStart, "Mon (next week)");
+
   const defrostEntries = Object.entries(defrostMap)
     .filter(([k]) => k >= todayIso)
     .sort(([a],[b]) => a.localeCompare(b));
