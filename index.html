@@ -531,6 +531,16 @@ function App() {
         payload.labelCode = form.labelCode || itemLabelCode(editId);
         await db.collection("items").doc(editId).update(payload);
         await logHistory("edited", payload, {itemId:editId, changes: JSON.stringify(payload)});
+        // Propagate notify/minBags to linked items
+        if (payload.notify && payload.labelCode) {
+          const linked = items.filter(i => i.id !== editId && i.labelCode === payload.labelCode);
+          for (const li of linked) {
+            await db.collection("items").doc(li.id).update({
+              notify: true, minBags: payload.minBags,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        }
       } else {
         const ref = db.collection("items").doc();
         payload.labelCode = form.labelCode || itemLabelCode(ref.id);
@@ -539,6 +549,16 @@ function App() {
         payload.addedByEmail = authUser?.email || "";
         await ref.set(payload);
         await logHistory("added", payload, {itemId:ref.id});
+        // Propagate notify/minBags to linked items
+        if (payload.notify && payload.labelCode) {
+          const linked = items.filter(i => i.labelCode === payload.labelCode);
+          for (const li of linked) {
+            await db.collection("items").doc(li.id).update({
+              notify: true, minBags: payload.minBags,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+          }
+        }
       }
     } catch(e) { alert("Save failed: " + e.message); }
     setSyncing(false); setShowForm(false); setEditId(null); setForm(INIT);
