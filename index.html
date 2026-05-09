@@ -2196,7 +2196,7 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   const todayIso = localDateStr(new Date());
   const weekKey = weekStart.toISOString().split("T")[0];
   const nextWeekStart = new Date(weekStart); nextWeekStart.setDate(nextWeekStart.getDate() + 7);
-  const nextWeekKey = localDateStr(nextWeekStart);
+  const nextWeekKey = nextWeekStart.toISOString().split("T")[0];
 
   function normalizeSlot(val) {
     if (!val) return [];
