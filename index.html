@@ -1041,9 +1041,9 @@ function App() {
                 {scanStatus==="error"    && <div style={{fontSize:11,color:"#F87171",marginTop:6}}>✕ Camera error — check permissions</div>}
                 {form.name && scanStatus==="" && !showScanner && <div style={{fontSize:11,color:"#4ADE80",marginTop:6}}>✓ {form.name}</div>}
                 {!editId && form.name.trim().length >= 3 && (() => {
-                  const words = form.name.trim().toLowerCase().split(/\s+/).filter(w=>w.length>=3);
+                  const query = form.name.trim().toLowerCase();
                   const matches = items.filter(it =>
-                    words.some(w => it.name.toLowerCase().includes(w))
+                    it.name.toLowerCase().includes(query)
                   ).slice(0,3);
                   if (!matches.length) return null;
                   return (
