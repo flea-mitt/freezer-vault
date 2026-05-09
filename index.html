@@ -2829,10 +2829,12 @@ function LabelsPanel({items, FREEZERS, getZone, db, isOwner}) {
 
             {/* Info */}
             <div style={{flex:1,minWidth:0}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,flexWrap:"wrap"}}>
                 <span style={{fontSize:13,color:"#E0F2FE",fontWeight:500}}>{g.name}</span>
                 {isLinked(g) && <span style={{fontSize:9,color:"rgba(52,211,153,.7)",background:"rgba(52,211,153,.1)",borderRadius:4,padding:"1px 6px"}}>⛓ linked</span>}
+                {isNew(g) && <span style={{fontSize:9,color:"#FDE68A",background:"rgba(253,230,138,.12)",border:"1px solid rgba(253,230,138,.3)",borderRadius:4,padding:"1px 6px"}}>★ new</span>}
               </div>
+              {fmtAdded(g) && <div style={{fontSize:10,color:"rgba(255,255,255,.28)",marginBottom:4}}>Added {fmtAdded(g)}</div>}
               {g.items.map(it=>{
                 const zone=getZone(it.freezer,it.zone); const fz=FREEZERS[it.freezer];
                 return (
