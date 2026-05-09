@@ -2291,7 +2291,7 @@ function MealPlanPanel({db, items, person1Name, person2Name, isOwner}) {
   });
 
   const expiringCandidates = items
-    .filter(it => it.bestBefore && !alreadyPlanned.has(it.id))
+    .filter(it => it.bestBefore && !alreadyPlanned.has(it.id) && it.category !== "Grains & Carbs")
     .map(it => ({...it, daysLeft: Math.ceil((new Date(it.bestBefore)-new Date())/86400000)}))
     .filter(it => it.daysLeft>=0 && it.daysLeft<=30)
     .sort((a,b) => a.daysLeft-b.daysLeft);
