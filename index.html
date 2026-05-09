@@ -1338,11 +1338,10 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,onMove,onMerge,kiosk,isGreen,isO
   const ei=expiryInfo(item.bestBefore);
   const qty=Math.max(1,Number(item.qty)||1);
   const totalPortions=item.totalPortions!=null?Number(item.totalPortions):(Number(item.bags||1)*qty);
-  const otherFreezer = item.freezer==="chest" ? "indoor" : "chest";
   const [showMove,setShowMove]=useState(false);
   const [movePortions,setMovePortions]=useState(totalPortions);
-  const [moveFreezer,setMoveFreezer]=useState(otherFreezer);
-  const [moveZone,setMoveZone]=useState(FREEZERS[otherFreezer].zones[0].id);
+  const [moveFreezer,setMoveFreezer]=useState(item.freezer);
+  const [moveZone,setMoveZone]=useState(FREEZERS[item.freezer].zones.find(z=>z.id!==item.zone)?.id || FREEZERS[item.freezer].zones[0].id);
   return (
     <div className={`icard${isGreen?" icard-green":""}`} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)}>
       <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
@@ -1422,11 +1421,11 @@ function ItemCard({item,zone,onEdit,onDel,onAdj,onMove,onMerge,kiosk,isGreen,isO
             <select className="inp" value={moveFreezer}
               onChange={e=>{const nf=e.target.value;setMoveFreezer(nf);setMoveZone(FREEZERS[nf].zones[0].id);}}
               style={{padding:"4px 8px",fontSize:12}}>
-              {Object.values(FREEZERS).filter(f=>f.id!==item.freezer).map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
+              {Object.values(FREEZERS).map(f=><option key={f.id} value={f.id}>{f.icon} {f.label}</option>)}
             </select>
             <select className="inp" value={moveZone} onChange={e=>setMoveZone(e.target.value)}
               style={{padding:"4px 8px",fontSize:12}}>
-              {FREEZERS[moveFreezer].zones.map(z=><option key={z.id} value={z.id}>{z.label}</option>)}
+              {FREEZERS[moveFreezer].zones.filter(z=>!(z.id===item.zone&&moveFreezer===item.freezer)).map(z=><option key={z.id} value={z.id}>{z.label}</option>)}
             </select>
             <button className="btn" style={{padding:"4px 10px",fontSize:11}}
               onClick={()=>{onMove(Math.min(totalPortions,Math.max(1,Number(movePortions)||1)),moveFreezer,moveZone);setShowMove(false);}}>
