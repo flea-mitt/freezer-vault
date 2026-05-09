@@ -533,7 +533,7 @@ function App() {
         await logHistory("edited", payload, {itemId:editId, changes: JSON.stringify(payload)});
       } else {
         const ref = db.collection("items").doc();
-        payload.labelCode = itemLabelCode(ref.id);
+        payload.labelCode = form.labelCode || itemLabelCode(ref.id);
         payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
         payload.addedBy = authUser?.displayName || "Unknown";
         payload.addedByEmail = authUser?.email || "";
@@ -1040,6 +1040,44 @@ function App() {
                 {scanStatus==="notfound" && <div style={{fontSize:11,color:"#FB923C",marginTop:6}}>⚠ Product not found — type name manually</div>}
                 {scanStatus==="error"    && <div style={{fontSize:11,color:"#F87171",marginTop:6}}>✕ Camera error — check permissions</div>}
                 {form.name && scanStatus==="" && !showScanner && <div style={{fontSize:11,color:"#4ADE80",marginTop:6}}>✓ {form.name}</div>}
+                {!editId && form.name.trim().length >= 3 && (() => {
+                  const words = form.name.trim().toLowerCase().split(/\s+/).filter(w=>w.length>=3);
+                  const matches = items.filter(it =>
+                    words.some(w => it.name.toLowerCase().includes(w))
+                  ).slice(0,3);
+                  if (!matches.length) return null;
+                  return (
+                    <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:4}}>
+                      <div style={{fontSize:10,color:"rgba(255,255,255,.35)",letterSpacing:".06em"}}>SIMILAR ITEMS — link to share barcode & stock tracking</div>
+                      {matches.map(it => {
+                        const fz   = FREEZERS[it.freezer];
+                        const zone = getZone(it.freezer, it.zone);
+                        const isLinked = form.labelCode && form.labelCode === (it.labelCode||itemLabelCode(it.id));
+                        return (
+                          <div key={it.id} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:isLinked?"rgba(52,211,153,.1)":"rgba(255,255,255,.04)",border:`1px solid ${isLinked?"rgba(52,211,153,.35)":"rgba(125,211,252,.1)"}`,borderRadius:8}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:12,color:"#E0F2FE"}}>{it.name}</div>
+                              <div style={{fontSize:10,color:"rgba(255,255,255,.35)"}}>{fz?.icon} {zone?.label} · {it.category}</div>
+                            </div>
+                            {isLinked
+                              ? <button className="btn btn-ghost" style={{fontSize:10,padding:"2px 8px",color:"#34D399"}}
+                                  onClick={()=>setForm(f=>({...f,labelCode:""}))}>✓ Linked — remove</button>
+                              : <button className="btn btn-ghost" style={{fontSize:10,padding:"2px 8px"}}
+                                  onClick={()=>setForm(f=>({
+                                    ...f,
+                                    labelCode: it.labelCode || itemLabelCode(it.id),
+                                    category: it.category, unit: it.unit, qty: it.qty,
+                                    calories: it.calories||"", protein: it.protein||"",
+                                    carbs: it.carbs||"", fat: it.fat||"",
+                                    recipeUrl: it.recipeUrl||""
+                                  }))}>Link & copy details</button>
+                            }
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </Field>
 
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
