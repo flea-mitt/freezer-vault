@@ -1790,8 +1790,6 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
   const [p1Input,         setP1Input]         = useState(person1Name||"");
   const [p2Input,         setP2Input]         = useState(person2Name||"");
   const [namesSaved,      setNamesSaved]      = useState(false);
-  const [migrating,       setMigrating]       = useState(false);
-  const [migrated,        setMigrated]        = useState(false);
 
   async function saveUsdaKey() {
     setKeySaving(true);
@@ -1830,20 +1828,6 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
     setExpiryWebhookUrl(url); setWebhookSaved(true); setTimeout(()=>setWebhookSaved(false), 2000);
   }
 
-  async function runMigration() {
-    setMigrating(true);
-    const snap = await db.collection("items").where("freezer","==","indoor").get();
-    const batch = db.batch();
-    snap.docs.forEach(doc => {
-      const z = doc.data().zone;
-      if      (z === "l3") batch.update(doc.ref, {zone:"l2"});
-      else if (z === "r3") batch.update(doc.ref, {zone:"r2"});
-      else if (z === "l4") batch.update(doc.ref, {zone:"l3"});
-      else if (z === "r4") batch.update(doc.ref, {zone:"r3"});
-    });
-    await batch.commit();
-    setMigrating(false); setMigrated(true);
-  }
 
   async function savePeopleNames() {
     const n1 = p1Input.trim() || "Person 1";
@@ -2035,18 +2019,6 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
         </button>
       </div>
 
-      {/* Indoor freezer drawer migration */}
-      {!migrated && (
-        <div style={{background:"rgba(251,146,60,.06)",border:"1px solid rgba(251,146,60,.2)",borderRadius:12,padding:"16px 18px",marginTop:12}}>
-          <div className="lbl" style={{color:"#FB923C",marginBottom:6,fontSize:9}}>Indoor Freezer — Drawer Migration</div>
-          <div style={{fontSize:11,color:"rgba(255,255,255,.35)",marginBottom:10}}>
-            Merges old Drawer 3 items into Drawer 2, and renumbers old Drawer 4 → Drawer 3. Run once after the freezer config change.
-          </div>
-          <button className="btn btn-ghost" style={{borderColor:"rgba(251,146,60,.4)",color:"#FB923C",fontSize:11}} onClick={runMigration} disabled={migrating}>
-            {migrating ? "Migrating…" : "Run migration"}
-          </button>
-        </div>
-      )}
     </div>
   );
 }
