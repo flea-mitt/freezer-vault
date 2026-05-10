@@ -95,11 +95,9 @@ const FREEZERS = {
       {id:"l1",label:"Left · Drawer 1", short:"L · D1",color:"#A7F3D0",bg:"rgba(167,243,208,0.07)"},
       {id:"l2",label:"Left · Drawer 2", short:"L · D2",color:"#6EE7B7",bg:"rgba(110,231,183,0.07)"},
       {id:"l3",label:"Left · Drawer 3", short:"L · D3",color:"#34D399",bg:"rgba(52,211,153,0.07)" },
-      {id:"l4",label:"Left · Drawer 4", short:"L · D4",color:"#10B981",bg:"rgba(16,185,129,0.07)" },
       {id:"r1",label:"Right · Drawer 1",short:"R · D1",color:"#A7F3D0",bg:"rgba(167,243,208,0.07)"},
       {id:"r2",label:"Right · Drawer 2",short:"R · D2",color:"#6EE7B7",bg:"rgba(110,231,183,0.07)"},
       {id:"r3",label:"Right · Drawer 3",short:"R · D3",color:"#34D399",bg:"rgba(52,211,153,0.07)" },
-      {id:"r4",label:"Right · Drawer 4",short:"R · D4",color:"#10B981",bg:"rgba(16,185,129,0.07)" },
     ]
   }
 };
@@ -1320,7 +1318,7 @@ function ChestMap({fz,zoneItems,zoneExp,activeZone,setAZ,kiosk}) {
 }
 
 function IndoorMap({fz,zoneItems,zoneExp,activeZone,setAZ,kiosk}) {
-  const rows=[["l1","r1"],["l2","r2"],["l3","r3"],["l4","r4"]];
+  const rows=[["l1","r1"],["l2","r2"],["l3","r3"]];
   const z=id=>fz.zones.find(z=>z.id===id);
   return (<>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:4}}>
@@ -1792,6 +1790,8 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
   const [p1Input,         setP1Input]         = useState(person1Name||"");
   const [p2Input,         setP2Input]         = useState(person2Name||"");
   const [namesSaved,      setNamesSaved]      = useState(false);
+  const [migrating,       setMigrating]       = useState(false);
+  const [migrated,        setMigrated]        = useState(false);
 
   async function saveUsdaKey() {
     setKeySaving(true);
@@ -1828,6 +1828,21 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
     const url = webhookInput.trim();
     await db.collection("config").doc("settings").set({expiryWebhookUrl: url}, {merge:true});
     setExpiryWebhookUrl(url); setWebhookSaved(true); setTimeout(()=>setWebhookSaved(false), 2000);
+  }
+
+  async function runMigration() {
+    setMigrating(true);
+    const snap = await db.collection("items").where("freezer","==","indoor").get();
+    const batch = db.batch();
+    snap.docs.forEach(doc => {
+      const z = doc.data().zone;
+      if      (z === "l3") batch.update(doc.ref, {zone:"l2"});
+      else if (z === "r3") batch.update(doc.ref, {zone:"r2"});
+      else if (z === "l4") batch.update(doc.ref, {zone:"l3"});
+      else if (z === "r4") batch.update(doc.ref, {zone:"r3"});
+    });
+    await batch.commit();
+    setMigrating(false); setMigrated(true);
   }
 
   async function savePeopleNames() {
@@ -2019,6 +2034,19 @@ function AdminPanel({db, allCategories, setStoredCategories, usdaKey, setUsdaKey
           {namesSaved ? "✓ Saved" : "Save names"}
         </button>
       </div>
+
+      {/* Indoor freezer drawer migration */}
+      {!migrated && (
+        <div style={{background:"rgba(251,146,60,.06)",border:"1px solid rgba(251,146,60,.2)",borderRadius:12,padding:"16px 18px",marginTop:12}}>
+          <div className="lbl" style={{color:"#FB923C",marginBottom:6,fontSize:9}}>Indoor Freezer — Drawer Migration</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,.35)",marginBottom:10}}>
+            Merges old Drawer 3 items into Drawer 2, and renumbers old Drawer 4 → Drawer 3. Run once after the freezer config change.
+          </div>
+          <button className="btn btn-ghost" style={{borderColor:"rgba(251,146,60,.4)",color:"#FB923C",fontSize:11}} onClick={runMigration} disabled={migrating}>
+            {migrating ? "Migrating…" : "Run migration"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
